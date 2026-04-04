@@ -1,0 +1,16 @@
+openai>=1.66.0
+requests
+dulwich
+starlette
+python-multipart
+uvicorn[standard]
+websockets
+huggingface_hub
+# optional: Claude Agent SDK for delegated code editing and advisory review (Python 3.10+)
+# Falls back to CLI subprocess if not installed
+# pip install claude-agent-sdk>=0.1.50
+# optional: browser automation tools (for browse_page/browser_action)
+playwright
+playwright-stealth
+# optional: local model server (requires Metal-enabled build on macOS)
+# CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python[server]
