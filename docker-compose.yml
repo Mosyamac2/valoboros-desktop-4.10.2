@@ -16,7 +16,7 @@ services:
       - OUROBOROS_SERVER_PORT=8765
       - OUROBOROS_REPO_DIR=/repo
       - OUROBOROS_DATA_DIR=/data
-      - OUROBOROS_VALIDATION_INBOX_DIR=/inbox
+      - OUROBOROS_VALIDATION_INBOX_DIR=ml-models-to-validate
       - OUROBOROS_VALIDATION_SANDBOX_MEM_MB=2048
       - OUROBOROS_FILE_BROWSER_DEFAULT=/data
       - TOTAL_BUDGET=${TOTAL_BUDGET:-50}
@@ -26,8 +26,8 @@ services:
       - valoboros-data:/data
       - valoboros-repo:/repo
 
-      # Model inbox (host → container)
-      - ./ml-models-to-validate:/inbox
+      # Inbox is now inside valoboros-data volume at /data/ml-models-to-validate/
+      # Upload via web UI or copy files into the volume.
 
       # Safety-critical files: READ-ONLY bind mounts
       # Agent physically cannot modify these inside the container

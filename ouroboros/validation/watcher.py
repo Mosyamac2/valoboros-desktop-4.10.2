@@ -18,6 +18,28 @@ from ouroboros.validation.types import ValidationConfig
 
 log = logging.getLogger(__name__)
 
+def _get_data_dir() -> Path:
+    """Get DATA_DIR from config, with fallback."""
+    try:
+        from ouroboros.config import DATA_DIR
+        return DATA_DIR
+    except Exception:
+        return Path.home() / "Ouroboros" / "data"
+
+
+def resolve_inbox_dir(config: ValidationConfig) -> Path:
+    """Resolve inbox_dir relative to DATA_DIR if not absolute.
+
+    If inbox_dir is a relative path (the default "ml-models-to-validate"),
+    it is resolved against OUROBOROS_DATA_DIR so it lives inside the
+    persistent data directory (important for Docker volumes).
+    """
+    inbox = Path(config.inbox_dir)
+    if not inbox.is_absolute():
+        inbox = _get_data_dir() / config.inbox_dir
+    inbox.mkdir(parents=True, exist_ok=True)
+    return inbox
+
 
 class ValidationWatcher:
     """Watches an inbox folder for new model ZIPs and triggers ingestion."""

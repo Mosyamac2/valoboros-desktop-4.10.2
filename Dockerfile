@@ -27,8 +27,8 @@ COPY --from=builder /install /usr/local
 COPY . /app/
 
 # Create data directories
-RUN mkdir -p /data /repo /inbox \
-    && chown -R valoboros:valoboros /app /data /repo /inbox
+RUN mkdir -p /data /repo \
+    && chown -R valoboros:valoboros /app /data /repo
 
 # Environment defaults
 ENV OUROBOROS_APP_ROOT=/opt/ouroboros \
@@ -36,7 +36,7 @@ ENV OUROBOROS_APP_ROOT=/opt/ouroboros \
     OUROBOROS_DATA_DIR=/data \
     OUROBOROS_SERVER_HOST=0.0.0.0 \
     OUROBOROS_SERVER_PORT=8765 \
-    OUROBOROS_VALIDATION_INBOX_DIR=/inbox \
+    OUROBOROS_VALIDATION_INBOX_DIR=ml-models-to-validate \
     OUROBOROS_VALIDATION_SANDBOX_MEM_MB=2048 \
     OUROBOROS_FILE_BROWSER_DEFAULT=/data \
     PYTHONUNBUFFERED=1
