@@ -131,11 +131,33 @@ export function initValidation({ ws, state }) {
             const resp = await fetch('/api/validation/upload', { method: 'POST', body: form });
             const data = await resp.json();
             if (data.ok) {
-                uploadStatus.textContent = `Uploaded! Bundle: ${data.bundle_id}`;
-                uploadStatus.className = 'status-completed';
+                uploadStatus.textContent = `Uploaded! Starting validation...`;
+                uploadStatus.className = 'status-validating';
                 selectedFile = null;
                 fileInput.value = '';
                 taskInput.value = '';
+                refreshList();
+
+                // Trigger validation pipeline automatically
+                try {
+                    const runResp = await fetch('/api/validation/run', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bundle_id: data.bundle_id }),
+                    });
+                    const runData = await runResp.json();
+                    if (runData.ok) {
+                        uploadStatus.textContent = `Validation complete: ${runData.verdict || 'done'}`;
+                        uploadStatus.className = 'status-completed';
+                    } else {
+                        uploadStatus.textContent = `Validation error: ${runData.error || 'unknown'}`;
+                        uploadStatus.className = 'status-error';
+                    }
+                } catch (runErr) {
+                    uploadStatus.textContent = `Upload OK, but validation failed to start: ${runErr.message}`;
+                    uploadStatus.className = 'status-error';
+                }
+                uploadBtn.disabled = false;
                 refreshList();
             } else {
                 uploadStatus.textContent = `Error: ${data.error}`;
