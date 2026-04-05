@@ -1,20 +1,60 @@
 # Plan: Per-Model Literature Research Before Validation
 
-**Date:** 2026-04-05
+**Date:** 2026-04-05  
 **Status:** PLAN ONLY — do not implement yet
 
 ---
 
 ## Concept
 
-After S0 comprehension produces a ModelProfile (model type, framework, algorithm,
-task domain, known issues), and BEFORE the methodology planner runs, Valoboros
-performs a **targeted literature search** relevant to THIS specific model. The
-search queries are dynamically generated from the model's characteristics, not
-from a static list.
+There are **two independent literature search mechanisms**, each serving a different
+purpose. Neither replaces the other.
 
-This enriches the knowledge base with model-specific insights that the methodology
-planner can immediately use when designing the validation plan.
+### Mechanism 1: Background Literature Scanning (EXISTING, unchanged)
+
+- **When:** Between validations, during consciousness idle wakeups (task #5)
+- **Queries:** 7 static queries, rotating across wakeups
+- **Purpose:** Cast a wide net, accumulate general ML validation knowledge over time
+- **Scope:** Generic — not tied to any specific model
+- **LLM cost:** Zero (heuristic relevance scoring)
+- **Implemented in:** `ouroboros/validation/literature_scanner.py`
+- **Status:** Already implemented, no changes needed
+
+### Mechanism 2: Per-Model Targeted Research (NEW)
+
+- **When:** During the pipeline, after S0 comprehension, before methodology planning
+- **Queries:** 2-3 queries dynamically generated from the model profile
+- **Purpose:** Find papers specifically relevant to THIS model's type, framework,
+  task domain, and detected risks — to inform the methodology plan
+- **Scope:** Narrow and targeted — tied to the model being validated
+- **LLM cost:** One call for synthesis (~$0.01-0.03)
+- **To be implemented in:** `ouroboros/validation/model_researcher.py` (new file)
+
+### How they complement each other
+
+```
+Between validations (consciousness):
+  Background Scanner → generic papers → knowledge/arxiv_recent.md
+                                         ↓
+                              (accumulates over time)
+                                         ↓
+During validation (pipeline):
+  S0 comprehension → model profile known
+                         ↓
+  Per-Model Researcher → targeted papers → knowledge/model_type_{type}.md
+                         ↓                  + bundle methodology/research.md
+  Methodology Planner reads BOTH:
+    - arxiv_recent.md (from background scans)
+    - model_type_{type}.md (from per-model research + reflection)
+    - validation_patterns.md (from reflection engine)
+                         ↓
+  Better validation plan for THIS model
+```
+
+The background scanner provides a baseline of general knowledge that accumulates
+passively. The per-model researcher adds a focused, model-specific research burst
+right before the methodology planner needs it. The planner reads everything from
+the knowledge base — it doesn't care which mechanism produced the knowledge.
 
 ---
 
@@ -27,54 +67,51 @@ S0 comprehension → dep install → methodology planning → S1-S9
 ## Proposed Pipeline Flow
 
 ```
-S0 comprehension → dep install → MODEL-SPECIFIC RESEARCH (NEW) → methodology planning → S1-S9
+S0 comprehension → dep install → PER-MODEL RESEARCH (NEW) → methodology planning → S1-S9
 ```
 
 ---
 
-## What Changes
-
-### 1. New module: `ouroboros/validation/model_researcher.py`
+## New Module: `ouroboros/validation/model_researcher.py`
 
 ```python
 class ModelResearcher:
-    """Performs targeted literature research relevant to a specific model."""
+    """Targeted literature research for a specific model before validation."""
 
     def __init__(self, profile: ModelProfile, knowledge_dir: Path, config: ValidationConfig):
         ...
 
     async def research(self) -> ModelResearchResult:
         """
-        1. Generate search queries from the model profile
-        2. Search arxiv (2-3 targeted queries)
+        1. Generate 2-3 arxiv queries from the model profile
+        2. Search arxiv for recent papers (last 90 days)
         3. Score relevance against THIS model (not generic keywords)
-        4. Read knowledge base for existing knowledge about this model type
-        5. Call LLM to synthesize: "Given this model and these papers,
+        4. Read existing knowledge base entries for this model type
+        5. Call LLM: "Given this model and these papers + existing knowledge,
            what validation risks should I prioritize?"
-        6. Write findings to knowledge base + bundle's methodology/ dir
+        6. Write findings to:
+           - knowledge/model_type_{type}.md (persists for future models)
+           - bundle methodology/research.md (part of this validation project)
         7. Return structured result
         """
 ```
 
-### 2. Query generation — the key difference from background scanning
-
-The background `LiteratureScanner` uses 7 static queries and rotates them.
-The `ModelResearcher` generates queries **from the model profile**:
+### Query generation — dynamic, model-specific
 
 ```python
 def _generate_queries(self, profile: ModelProfile) -> list[str]:
     """Build 2-3 arxiv queries specific to this model."""
     queries = []
 
-    # Query 1: Model type + framework + validation
-    # e.g., "CatBoost regression validation overfitting"
+    # Query 1: Algorithm/framework + validation
+    # e.g., "cat:cs.LG AND (CatBoost OR catboost) AND (validation OR testing)"
     queries.append(
         f"cat:cs.LG AND ({profile.algorithm} OR {profile.framework}) "
         f"AND (validation OR testing OR evaluation)"
     )
 
-    # Query 2: Task domain + known risks
-    # e.g., "credit scoring model risk early repayment prediction"
+    # Query 2: Task domain + model risk
+    # e.g., "cat:cs.LG AND (credit scoring OR early repayment) AND (model risk OR validation)"
     task_keywords = _extract_domain_keywords(profile.task_description)
     if task_keywords:
         queries.append(
@@ -82,29 +119,28 @@ def _generate_queries(self, profile: ModelProfile) -> list[str]:
             f"AND (model risk OR validation)"
         )
 
-    # Query 3: Specific risks from comprehension gaps
-    # e.g., "temporal leakage time series" if temporal_column was detected
+    # Query 3: Specific risks detected by S0 comprehension
     if profile.temporal_column:
         queries.append("cat:cs.LG AND (temporal leakage OR time series validation)")
-    if profile.protected_attributes_candidates:
+    elif profile.protected_attributes_candidates:
         queries.append("cat:cs.LG AND (fairness ML OR bias detection)")
+    elif profile.comprehension_gaps:
+        # If there are gaps, search for the model type + common risks
+        queries.append(
+            f"cat:cs.LG AND {profile.model_type} AND (overfitting OR data leakage)"
+        )
 
     return queries[:3]  # max 3 queries to limit latency
 ```
 
-**`_extract_domain_keywords()`** uses simple NLP (no LLM):
+**`_extract_domain_keywords(task_description)`** — simple keyword extraction:
 - Split task description into words
 - Remove stopwords
-- Keep nouns and domain terms (credit, scoring, churn, fraud, etc.)
+- Keep nouns and domain terms
 - Take top 3-5 keywords
+- Optionally: one cheap LLM call to extract keywords (more accurate)
 
-Alternatively, could use the LLM (one cheap call) to extract domain keywords
-from the task description. This would be more accurate but adds cost/latency.
-
-### 3. Relevance scoring — model-specific, not generic
-
-The background scanner scores relevance against generic keywords ("validation",
-"testing", "leakage"). The model researcher scores against THIS model:
+### Relevance scoring — model-specific
 
 ```python
 def _score_relevance(self, paper: dict, profile: ModelProfile) -> float:
@@ -119,11 +155,11 @@ def _score_relevance(self, paper: dict, profile: ModelProfile) -> float:
 
     # Model-specific keywords (high weight)
     if profile.framework.lower() in text:
-        score += 0.3  # paper mentions the same framework
+        score += 0.3
     if profile.algorithm.lower() in text:
-        score += 0.3  # paper mentions the same algorithm
+        score += 0.3
     if profile.model_type.lower() in text:
-        score += 0.2  # paper mentions the same model type
+        score += 0.2
 
     # Task domain keywords (high weight)
     for kw in _extract_domain_keywords(profile.task_description):
@@ -133,9 +169,9 @@ def _score_relevance(self, paper: dict, profile: ModelProfile) -> float:
     return min(score, 1.0)
 ```
 
-### 4. LLM synthesis — "What should I watch for?"
+### LLM synthesis — "What should I watch for with THIS model?"
 
-After finding relevant papers, call the LLM once:
+After finding relevant papers, one LLM call:
 
 ```
 You are preparing to validate a {model_type} model ({algorithm}, {framework})
@@ -144,42 +180,37 @@ that {task_description}.
 I found these recent papers relevant to this model type:
 {paper_summaries}
 
-I also know this from my knowledge base:
+I also know this from my knowledge base about {model_type} models:
 {existing_knowledge}
 
-Based on this, what specific validation risks should I prioritize for this model?
-What techniques from these papers could I apply?
+Based on this, what specific validation risks should I prioritize for THIS model?
+What techniques from these papers could I apply as validation checks?
 
-Return a JSON with:
-- risk_priorities: ordered list of risks specific to this model
-- applicable_techniques: techniques from the papers I should try
-- suggested_checks: new check ideas inspired by the papers
+Return JSON:
+{
+  "risk_insights": ["ordered list of model-specific risks"],
+  "applicable_techniques": ["techniques from papers to try"],
+  "suggested_checks": [{"check_id": "...", "description": "...", "rationale": "..."}]
+}
 ```
 
-This output feeds directly into the methodology planner, which already accepts
-`knowledge_references` and `risk_priorities`.
+---
 
-### 5. Result dataclass
+## Result Dataclass
+
+Add to `ouroboros/validation/types.py`:
 
 ```python
 @dataclass
 class ModelResearchResult:
-    queries_used: list[str]
-    papers_found: int
-    relevant_papers: list[PaperSummary]
-    risk_insights: list[str]          # model-specific risk priorities from LLM
-    applicable_techniques: list[str]  # techniques from papers
-    suggested_checks: list[dict]      # new check ideas from papers
-    knowledge_written: list[str]      # files written to knowledge dir
+    queries_used: list[str] = field(default_factory=list)
+    papers_found: int = 0
+    relevant_papers: list[PaperSummary] = field(default_factory=list)
+    risk_insights: list[str] = field(default_factory=list)
+    applicable_techniques: list[str] = field(default_factory=list)
+    suggested_checks: list[dict] = field(default_factory=list)
+    knowledge_written: list[str] = field(default_factory=list)
 ```
-
-### 6. Where results are saved
-
-Two places:
-- **Bundle-level:** `<bundle_dir>/methodology/research.md` — papers and insights
-  relevant to THIS model (part of the validation project)
-- **Knowledge base:** `knowledge/model_type_{type}.md` — appended with new
-  insights that persist across validations
 
 ---
 
@@ -194,21 +225,20 @@ Insert between dependency install and methodology planning:
 await self._install_dependencies(profile)
 
 # --- Per-model literature research (NEW) ---
-self._log("Searching for literature relevant to this model...")
-research = await self._research_model(profile)
-if research:
-    self._log(f"Found {len(research.relevant_papers)} relevant papers, "
-              f"{len(research.risk_insights)} risk insights")
+if self._config.pre_research:
+    self._log("Searching for literature relevant to this model...")
+    research = await self._research_model(profile)
+    if research and research.relevant_papers:
+        self._log(f"Found {len(research.relevant_papers)} relevant papers, "
+                  f"{len(research.risk_insights)} risk insights")
+    else:
+        self._log("No relevant papers found (non-blocking, continuing).")
 
 # --- Methodology planning (now enriched by research) ---
 methodology = await self._plan_methodology(profile)
 ```
 
-The methodology planner already reads the knowledge base. By writing research
-results to the knowledge base BEFORE calling the planner, the planner
-automatically picks them up — no changes needed to the planner itself.
-
-### New method in ValidationPipeline:
+New method:
 
 ```python
 async def _research_model(self, profile: ModelProfile) -> Optional[ModelResearchResult]:
@@ -216,38 +246,53 @@ async def _research_model(self, profile: ModelProfile) -> Optional[ModelResearch
         from ouroboros.validation.model_researcher import ModelResearcher
         knowledge_dir = self._bundle_dir.parent.parent / "memory" / "knowledge"
         researcher = ModelResearcher(profile, knowledge_dir, self._config)
-        return await researcher.research()
+        result = await researcher.research()
+        # Also save to bundle's methodology/ dir
+        research_md = self._bundle_dir / "methodology" / "research.md"
+        research_md.write_text(
+            _format_research_md(result), encoding="utf-8"
+        )
+        return result
     except Exception as exc:
         self._log(f"Model research failed (non-blocking): {exc}")
         return None
 ```
 
-**Key design decision:** Research failure is non-blocking. If arxiv is down or
-the LLM call fails, the pipeline continues with whatever knowledge already exists.
+**Key:** Research failure is non-blocking. If arxiv is down, the pipeline
+continues with whatever knowledge already exists.
 
 ---
 
-## Methodology Planner Changes
+## Methodology Planner — No Code Changes Needed
 
-**No code changes needed.** The planner already:
-1. Calls `_gather_knowledge()` which reads `model_type_{type}.md` and `validation_patterns.md`
-2. Passes knowledge to the LLM prompt
-3. Accepts `risk_priorities` and `checks_to_create` in its output
+The planner already reads the knowledge base via `_gather_knowledge()`:
 
-The research step enriches these knowledge files before the planner reads them.
-The planner benefits automatically.
+```python
+def _gather_knowledge(self) -> str:
+    mt_file = self._knowledge_dir / f"model_type_{self._profile.model_type}.md"
+    patterns_file = self._knowledge_dir / "validation_patterns.md"
+    ...
+```
 
-However, the LLM prompt for the planner could be improved to explicitly mention:
-"Recent literature research has been conducted — see the Knowledge Base section
-for arxiv-sourced insights." This makes the LLM more likely to use the research.
+The per-model researcher writes to `model_type_{type}.md` before the planner
+runs. The planner picks up the enriched knowledge automatically.
 
-**File:** `ouroboros/validation/methodology_planner.py` — minor prompt update.
+**Optional enhancement:** Add a minor prompt tweak to the planner to mention
+that recent research was conducted:
+
+```python
+# In _METHODOLOGY_PROMPT, add to the Knowledge Base section:
+"Note: Targeted literature research was conducted for this specific model.
+Recent arxiv findings are included in the knowledge base below."
+```
+
+This nudges the LLM to pay attention to the research findings.
 
 ---
 
 ## Config Changes
 
-### File: `ouroboros/config.py`
+### File: `ouroboros/config.py` — add to SETTINGS_DEFAULTS:
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -255,79 +300,71 @@ for arxiv-sourced insights." This makes the LLM more likely to use the research.
 | `OUROBOROS_VALIDATION_RESEARCH_MAX_QUERIES` | `3` | Max arxiv queries per model |
 | `OUROBOROS_VALIDATION_RESEARCH_MAX_PAPERS` | `5` | Max papers to assess per model |
 
-### File: `ouroboros/validation/types.py`
+### File: `ouroboros/validation/types.py` — add to ValidationConfig:
 
-Add `pre_research: bool = True` and `research_max_queries: int = 3` to `ValidationConfig`.
+```python
+pre_research: bool = True
+research_max_queries: int = 3
+research_max_papers: int = 5
+```
 
 ---
 
-## Prompt/Principle Changes
+## Prompt Changes
 
-### File: `prompts/SYSTEM.md`
-
-Add to the "Validation Domain Context" section:
+### File: `prompts/SYSTEM.md` — add to "Validation Domain Context":
 
 ```
 **Pre-validation research:** Before validating each model, I search for recent
 academic papers relevant to that specific model type, framework, and domain.
 I use these to inform my methodology plan — not as generic background reading,
 but as targeted preparation for THIS model. A CatBoost credit scoring model
-gets different research than a PyTorch NLP model.
+gets different research than a PyTorch NLP model. This is separate from and
+in addition to my background literature scanning between validations.
 ```
 
-### File: `BIBLE.md`
+### File: `BIBLE.md` — no changes needed
 
-No changes needed. The existing Validation Quality Standards already say:
-"Eagerly search for new techniques." This is just implementing that principle
-at the per-model level instead of only in background consciousness.
+Already says "Eagerly search for new techniques." Both mechanisms implement this.
 
-### File: `prompts/CONSCIOUSNESS.md`
+### File: `prompts/CONSCIOUSNESS.md` — no changes needed
 
-Task #5 (Literature scan) remains as-is for background scanning. The per-model
-research is a separate, pipeline-level activity. No change needed.
+Task #5 (background literature scan) remains unchanged. The per-model research
+is a pipeline-level activity, not a consciousness task.
 
 ---
 
-## Interaction Between Background Scanning and Per-Model Research
+## Two Mechanisms Side by Side
 
-| Aspect | Background Scanner | Per-Model Researcher |
-|--------|-------------------|---------------------|
-| **When** | Between validations (consciousness idle) | During pipeline, after S0 |
+| Aspect | Background Scanner (existing) | Per-Model Researcher (new) |
+|--------|------------------------------|---------------------------|
+| **Trigger** | Consciousness idle wakeup (every 3rd) | New model arrives for validation |
+| **When in lifecycle** | Between validations | During pipeline, after S0 |
 | **Queries** | 7 static, rotating | 2-3 generated from model profile |
-| **Relevance** | Generic keywords | Model-specific scoring |
-| **LLM usage** | None (heuristic only) | One call for synthesis |
-| **Writes to** | `knowledge/arxiv_recent.md` | `knowledge/model_type_{type}.md` + bundle `methodology/research.md` |
-| **Benefits** | All future models | THIS model's methodology plan |
-| **Cost** | Free (no LLM) | ~$0.01-0.03 per model (one Sonnet call) |
+| **Relevance scoring** | Generic keywords (+0.2 each) | Model-specific (+0.3 for framework/algorithm match) |
+| **LLM usage** | None (pure heuristic) | One synthesis call |
+| **Writes to** | `knowledge/arxiv_recent.md` | `knowledge/model_type_{type}.md` + `methodology/research.md` |
+| **Benefits** | All future models (broad) | THIS model's methodology plan (targeted) |
+| **Cost** | Free | ~$0.01-0.03 per model |
+| **Latency** | N/A (background) | ~10-20s added to pipeline |
+| **If fails** | Next wakeup retries | Non-blocking, pipeline continues |
+| **Disableable** | `/bg stop` | `config.pre_research = False` |
 
-They complement each other:
-- Background scanning casts a wide net at zero cost
-- Per-model research does a focused deep dive at low cost
-- Both write to the knowledge base, which the methodology planner reads
+**Both coexist. Neither replaces the other.** The background scanner builds a
+broad foundation of knowledge over time at zero cost. The per-model researcher
+adds a focused, timely research burst for the specific model about to be validated.
 
 ---
 
 ## Estimated Effort
 
-| Component | LOC | LLM calls | Latency added |
-|-----------|-----|-----------|---------------|
-| `model_researcher.py` | ~200 | 1 (synthesis) | ~10-20s (arxiv API + LLM) |
-| `pipeline.py` changes | ~15 | 0 | 0 |
-| `types.py` changes | ~10 | 0 | 0 |
-| `config.py` changes | ~5 | 0 | 0 |
-| `methodology_planner.py` prompt tweak | ~5 | 0 | 0 |
-| `SYSTEM.md` prompt addition | ~5 lines | 0 | 0 |
-| Tests | ~80 | 0 | 0 |
-| **Total** | **~320** | **1 per model** | **~10-20s per model** |
-
----
-
-## Risks and Mitigations
-
-| Risk | Mitigation |
-|------|-----------|
-| Arxiv API is slow or down | Non-blocking: research failure doesn't stop the pipeline |
-| Queries return irrelevant papers | Model-specific scoring filters them; LLM synthesis adds another filter |
-| Adds 10-20s latency per validation | Configurable: `pre_research=False` to disable |
-| LLM synthesis hallucinates risks | Methodology planner has its own LLM call that cross-checks; fallback plan ignores research |
-| Cost per model increases | One Sonnet call (~$0.01-0.03) — negligible vs. S0 comprehension cost |
+| Component | LOC | LLM calls |
+|-----------|-----|-----------|
+| `model_researcher.py` (new) | ~200 | 1 per model |
+| `pipeline.py` changes | ~20 | 0 |
+| `types.py` changes | ~15 | 0 |
+| `config.py` + `config_loader.py` | ~10 | 0 |
+| `SYSTEM.md` prompt addition | ~5 lines | 0 |
+| `methodology_planner.py` prompt tweak (optional) | ~3 lines | 0 |
+| Tests | ~80 | 0 |
+| **Total** | **~330** | **1 per model** |
