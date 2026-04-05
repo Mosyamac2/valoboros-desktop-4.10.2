@@ -230,6 +230,7 @@ def _sync_core_files() -> None:
         "ouroboros/safety.py",
         "prompts/SAFETY.md",
         "ouroboros/tools/registry.py",
+        "ouroboros/validation/sandbox.py",
     ]
     for rel in sync_paths:
         src = bundle_dir / rel

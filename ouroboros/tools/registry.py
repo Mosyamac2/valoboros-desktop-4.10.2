@@ -25,6 +25,7 @@ SAFETY_CRITICAL_PATHS = frozenset([
     "ouroboros/safety.py",
     "ouroboros/tools/registry.py",
     "prompts/SAFETY.md",
+    "ouroboros/validation/sandbox.py",
 ])
 _SAFETY_CRITICAL_LOWER = frozenset(p.lower() for p in SAFETY_CRITICAL_PATHS)
 

@@ -143,3 +143,32 @@ Before every commit, verify the following:
 ---
 
 *This section is the authoritative definition of "DEVELOPMENT.md compliance" referenced in the `development_compliance` item in `docs/CHECKLISTS.md`.*
+
+---
+
+## Validation Module Conventions
+
+### Check Files (`ouroboros/validation/checks/`)
+
+- Each check is a single `.py` file exporting: `def run(bundle_dir: Path, model_profile: dict, sandbox=None) -> CheckResult`
+- `check_manifest.json` is the single source of truth for registered checks
+- Check IDs follow the pattern `S{N}.{CATEGORY}` (e.g., `S4.TARGET_LEAKAGE`)
+- Checks with `check_type: "sandbox"` must gracefully return "skipped" when `sandbox is None`
+- Heavy dependencies (shap, fairlearn) must be imported lazily inside `run()`, not at module level
+
+### Types
+
+- All validation dataclasses live in `ouroboros/validation/types.py`
+- Every dataclass has `to_dict()` and `from_dict()` for JSON serialization
+
+### Stage Orchestrators
+
+- Thin modules in `ouroboros/validation/` (one per stage S0-S9)
+- Standard signature: `async def run_stage(bundle_dir, model_profile, check_registry, sandbox, config) -> ValidationStageResult`
+- Use `_stage_runner.run_checks_for_stage()` for check-based stages
+- S1 (reproducibility) and S9 (synthesis) have custom logic
+
+### Config
+
+- All validation settings use `OUROBOROS_VALIDATION_*` keys in `ouroboros/config.py`
+- `config_loader.load_validation_config()` maps them to `ValidationConfig`

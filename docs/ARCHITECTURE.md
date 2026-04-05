@@ -865,3 +865,55 @@ automatically on completion or via `kill_all_tracked_subprocesses()` on panic.
     the codebase. Every structural change (new module, new API endpoint, new data file,
     new UI page) must be reflected here. This is the single source of truth for how
     the system works.
+
+---
+
+## Validation Pipeline
+
+Ouroboros-V includes a self-improving ML model validation platform. Key components:
+
+### Modules (`ouroboros/validation/`)
+
+| Module | Purpose |
+|--------|---------|
+| `types.py` | Core dataclasses: CheckResult, ValidationReport, ModelProfile, etc. |
+| `sandbox.py` | Secure model execution (resource limits, network isolation). **Safety-critical.** |
+| `check_registry.py` | Dynamic check CRUD, tag-based filtering, manifest persistence |
+| `artifact_comprehension.py` | S0: LLM-powered analysis of raw model artifacts → ModelProfile |
+| `_stage_runner.py` | Shared orchestrator logic for check-based stages |
+| `intake_check.py` .. `code_quality.py` | Stage orchestrators S0-S8 |
+| `synthesis.py` | S9: generates hard/soft improvement recommendations |
+| `report.py` | JSON + Markdown report generation |
+| `pipeline.py` | ValidationPipeline (S0-S9) and RevalidationPipeline |
+| `effectiveness.py` | Tracks finding quality and recommendation quality independently |
+| `self_assessment.py` | Tier 0: LLM self-rates its own findings |
+| `model_improver.py` | Side agent: implements hard recommendations in sandbox |
+| `config_loader.py` | Maps OUROBOROS_VALIDATION_* settings to ValidationConfig |
+
+### Tools (`ouroboros/tools/`)
+
+| Module | Tools |
+|--------|-------|
+| `model_intake.py` | ingest_model_artifacts, list_validations, get_validation_status |
+| `validation.py` | run_validation, run_validation_stage, get_validation_report, get_model_profile, list/create/edit/disable/delete_validation_check, run_improvement_cycle, compare_validations, backtest_check |
+| `validation_feedback.py` | submit_finding_feedback, run_self_assessment, get_finding_effectiveness, get_recommendation_effectiveness, get_platform_metrics, get_evolution_targets, get_methodology_changelog |
+
+### Checks (`ouroboros/validation/checks/`)
+
+Individual `.py` files registered in `check_manifest.json`. Each exports `run(bundle_dir, model_profile, sandbox) -> CheckResult`. The agent can create, edit, disable, and delete checks as part of methodology evolution.
+
+### Data (`~/Ouroboros/data/validations/`)
+
+Per-bundle: `raw/` (model code + data samples), `inputs/` (task + description), `inferred/` (model_profile.json), `results/` (stage results + report), `improvement/` (plan + implementation + revalidation).
+
+### Pipeline Flow
+
+```
+Ingest → S0 Comprehension (HARD GATE) → S1 Reproducibility (HARD GATE for S2-S7)
+  → S2-S8 checks → S9 Synthesis → Report → Self-Assessment (Tier 0)
+  → [Optional] Improvement Cycle: ModelImprover → Revalidation → Effectiveness Recording
+```
+
+### Feedback & Evolution
+
+Four-tier feedback: Tier 0 (LLM self-assessment, weight 0.3), Tier 1 (improvement lift), Tier 2 (human, weight 1.0), Tier 3 (LLM cross-check, weight 0.5). Finding quality and recommendation quality tracked independently. Graduated evolution gates: early phase (< 20 bundles) = low bar, mature phase = metric improvement required.
