@@ -31,6 +31,7 @@ import uvicorn
 
 from ouroboros import get_version
 from ouroboros.file_browser_api import file_browser_routes
+from ouroboros.server_validation_api import validation_api_routes
 from ouroboros.model_catalog_api import api_model_catalog
 from ouroboros.server_control import (
     execute_panic_stop as _execute_panic_stop_impl,
@@ -1002,6 +1003,7 @@ routes = [
     Route("/api/health", endpoint=api_health),
     Route("/api/state", endpoint=api_state),
     *file_browser_routes(),
+    *validation_api_routes(),
     Route("/api/onboarding", endpoint=api_onboarding),
     Route("/api/claude-code/status", endpoint=api_claude_code_status),
     Route("/api/claude-code/install", endpoint=api_claude_code_install, methods=["POST"]),
