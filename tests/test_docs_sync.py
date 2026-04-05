@@ -13,10 +13,11 @@ def _read(rel: str) -> str:
 def test_readme_mentions_multistep_wizard_and_live_task_ui():
     readme = _read("README.md")
 
-    assert "shared desktop/web wizard is now multi-step" in readme
-    assert "add access first, choose visible models second, set review mode third, set budget fourth" in readme
-    assert "Focused Task UX" in readme
-    assert "live task card" in readme
+    # Valoboros-updated README
+    assert "Valoboros" in readme
+    assert "self-evolving ML model validation platform" in readme
+    assert "Validation Platform" in readme
+    assert "BIBLE.md" in readme
 
 
 def test_architecture_mentions_shared_log_grouping_and_openai_review_fallback():

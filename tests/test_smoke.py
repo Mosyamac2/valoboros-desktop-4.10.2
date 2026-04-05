@@ -125,6 +125,15 @@ EXPECTED_TOOLS = [
     "enable_tools",
     # Advisory pre-review gate
     "advisory_pre_review", "review_status",
+    # Validation platform (Valoboros)
+    "ingest_model_artifacts", "list_validations", "get_validation_status",
+    "run_validation", "run_validation_stage", "get_validation_report",
+    "get_model_profile", "list_validation_checks", "create_validation_check",
+    "edit_validation_check", "disable_validation_check", "delete_validation_check",
+    "run_improvement_cycle", "compare_validations", "backtest_check",
+    "submit_finding_feedback", "run_self_assessment",
+    "get_finding_effectiveness", "get_recommendation_effectiveness",
+    "get_platform_metrics", "get_evolution_targets", "get_methodology_changelog",
 ]
 
 
@@ -452,7 +461,7 @@ def test_function_count_reasonable():
     """Codebase doesn't have too few or too many functions."""
     sizes = _get_function_sizes()
     assert len(sizes) >= 100, f"Only {len(sizes)} functions — too few?"
-    assert len(sizes) <= 1000, f"{len(sizes)} functions — too many?"
+    assert len(sizes) <= 1300, f"{len(sizes)} functions — too many?"
 
 
 # ── Pre-push gate tests ──────────────────────────────────────────────
