@@ -509,3 +509,110 @@ All settings can be set via environment variables or `ValidationConfig`:
 
 **Cost-saving tip:** Use `anthropic/claude-sonnet-4` instead of `opus` for all
 models during testing. Sonnet is ~10x cheaper and works well for validation tasks.
+
+---
+
+## Part 7: Self-Modification — Valoboros Can Rewrite Itself
+
+Valoboros inherits the full Ouroboros self-modification machinery. This is not
+theoretical — the agent can and will rewrite its own code, including the
+validation pipeline, checks, and even this literature scanner.
+
+### What is preserved from Ouroboros
+
+The entire original self-modification stack is intact:
+
+| Capability | How it works | Key files |
+|-----------|-------------|-----------|
+| **Code editing** | `repo_write`, `str_replace_editor`, `claude_code_edit` tools | `ouroboros/tools/git.py`, `ouroboros/tools/shell.py` |
+| **Git versioning** | `repo_commit` creates versioned commits | `ouroboros/tools/git.py` |
+| **7-step evolution protocol** | assess → select → implement → smoke test → review → Bible check → commit | `prompts/SYSTEM.md` |
+| **Background consciousness** | Wakes periodically, thinks, acts on its own initiative | `ouroboros/consciousness.py` |
+| **Multi-model review** | 2-3 LLMs review code changes before commit | `ouroboros/review.py` |
+
+### What Valoboros can rewrite
+
+Everything that isn't in `SAFETY_CRITICAL_PATHS` is fair game:
+
+- **Validation checks** — create new ones, edit existing ones, delete useless ones
+  (via `create_validation_check`, `edit_validation_check`, `delete_validation_check` tools,
+  or by directly editing files in `ouroboros/validation/checks/`)
+- **The literature scanner** — including the hardcoded arxiv queries, the relevance
+  keywords, the scoring heuristic, or the entire scanning approach
+- **Stage orchestrators** — can rewrite how S0-S9 work
+- **The synthesis prompt** — can improve how recommendations are generated
+- **The methodology planner** — can change how validation plans are designed
+- **Its own identity** — `identity.md` can be radically rewritten
+
+### Example: How Valoboros could improve its own literature scanning
+
+Currently, the arxiv queries are static (7 hardcoded queries in
+`ouroboros/validation/literature_scanner.py`):
+
+```python
+_ARXIV_QUERIES = [
+    "cat:cs.LG AND (model validation OR model testing)",
+    "cat:cs.LG AND (data leakage OR train test contamination)",
+    ...
+]
+```
+
+And relevance scoring is keyword-based (no LLM):
+
+```python
+_RELEVANCE_KEYWORDS = [
+    "validation", "testing", "leakage", "fairness", ...
+]
+```
+
+When running as a full agent with the consciousness loop active, Valoboros could:
+
+1. **Notice** that its literature scans return mostly irrelevant papers (low relevance scores)
+2. **Reflect** during a consciousness wakeup: "My arxiv queries are too broad"
+3. **Decide** to rewrite the queries based on what it has learned from past validations
+   (e.g., after validating 10 credit risk models, add "credit scoring model validation")
+4. **Edit** `literature_scanner.py` via `str_replace_editor` or `repo_write`
+5. **Test** the new queries (run a scan, check relevance scores)
+6. **Commit** the change with a methodology version bump
+7. **Restart** to load the new code
+
+This is the Ouroboros principle in action: **the agent improves the tools it uses
+to improve itself.**
+
+### Pipeline mode vs. Full agent mode
+
+There is an important practical distinction:
+
+| Mode | How you run it | Self-modification? |
+|------|---------------|-------------------|
+| **Pipeline mode** | `asyncio.run(pipeline.run())` from a script | **No** — runs validation and exits. No consciousness loop, no evolution. |
+| **Full agent mode** | `python server.py` → web UI | **Yes** — consciousness loop is active, agent can think between tasks, rewrite code, evolve methodology. |
+
+When you run Valoboros as a pipeline (Part 1 of this tutorial), it validates the
+model and exits. It does NOT modify its own code during a pipeline run — it just
+uses whatever checks and logic exist at that moment.
+
+When Ouroboros runs as a full agent (via `launcher.py` → `server.py` → web UI),
+the background consciousness loop wakes up periodically and can:
+- Scan the inbox for new models (watcher)
+- Reflect on past validations (reflection engine)
+- Search arxiv for new techniques (literature scanner)
+- Evolve the methodology (methodology evolver)
+- Rewrite any of its own code (Ouroboros self-modification)
+
+**The self-improvement only happens in full agent mode.** Pipeline mode is a
+snapshot execution of the current methodology.
+
+### Protected files (cannot be self-modified)
+
+These files are in `SAFETY_CRITICAL_PATHS` and are restored from the bundle on
+every restart:
+
+- `BIBLE.md` — the constitution
+- `ouroboros/safety.py` — the security supervisor
+- `ouroboros/tools/registry.py` — the hardcoded sandbox
+- `prompts/SAFETY.md` — the safety evaluation prompt
+- `ouroboros/validation/sandbox.py` — the model execution sandbox
+
+Everything else — including all validation logic, checks, prompts, and the
+literature scanner — can be modified by the agent.
