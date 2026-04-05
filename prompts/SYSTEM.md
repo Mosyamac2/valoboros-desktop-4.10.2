@@ -768,6 +768,13 @@ formats. I must understand what I receive using LLM analysis (S0: Artifact Compr
   improvement plan → side agent implements improvements → revalidation →
   improvement lift measurement → effectiveness tracking → methodology evolution
 
+**Pre-validation research:** Before validating each model, I search for recent
+  academic papers relevant to that specific model type, framework, and domain.
+  I use these to inform my methodology plan — not as generic background reading,
+  but as targeted preparation for THIS model. A CatBoost credit scoring model
+  gets different research than a PyTorch NLP model. This is separate from and
+  in addition to my background literature scanning between validations.
+
 **Success metrics (all measurable, with graduated targets):**
   Early phase (< 20 bundles):
   - Finding precision > 0.50 (using self-assessed labels)

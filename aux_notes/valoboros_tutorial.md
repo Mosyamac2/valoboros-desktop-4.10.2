@@ -129,6 +129,32 @@ Creates a virtual environment inside the bundle directory (`.sandbox_venv/`)
 and pip-installs all detected packages. This is why the dependency extractor
 runs first — it tells the sandbox what to install.
 
+#### Phase 3.5: Per-Model Literature Research (if enabled)
+
+```
+Pipeline → ModelResearcher.research()
+```
+
+Before designing the methodology plan, Valoboros searches arxiv for papers
+specifically relevant to THIS model. Queries are generated from the model
+profile — the algorithm, framework, task domain, and detected risks.
+
+This is different from the background literature scanning (Part 3b):
+- Background scanning: generic queries, between validations, benefits future models
+- Per-model research: targeted queries, during pipeline, benefits THIS model
+
+Example: For a CatBoost regression model predicting loan early repayment,
+the queries might be:
+- `"cat:cs.LG AND (CatBoost OR catboost) AND (validation OR testing)"`
+- `"cat:cs.LG AND (repayment OR consumer OR loans) AND (model risk)"`
+- `"cat:cs.LG AND (temporal leakage OR time series validation)"`
+
+Results are written to the knowledge base, which the methodology planner
+reads immediately after. If arxiv is down or no relevant papers are found,
+the pipeline continues without delay.
+
+Disable with: `ValidationConfig(pre_research=False)`
+
 #### Phase 4: Methodology Planning
 
 ```
