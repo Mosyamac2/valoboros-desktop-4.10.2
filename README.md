@@ -136,65 +136,107 @@ make test
 
 ---
 
-## Build
+## Docker Deployment
 
-### Docker (web UI)
+The recommended way to run Valoboros on a server. Docker provides filesystem
+isolation, resource limits, and read-only safety file mounts.
 
-Docker is for the web UI/runtime flow, not the desktop bundle. The container binds to
-`0.0.0.0:8765` by default, and the image now also defaults `OUROBOROS_FILE_BROWSER_DEFAULT`
-to `${APP_HOME}` so the Files tab always has an explicit network-safe root inside the container.
-
-Build the image:
+### Quick Start
 
 ```bash
-docker build -t ouroboros-web .
+git clone https://github.com/Mosyamac2/valoboros-desktop-4.10.2.git
+cd valoboros-desktop-4.10.2
+cp .env.example .env
+nano .env  # add your OPENROUTER_API_KEY
+docker compose up -d --build
 ```
 
-Run on the default port:
+Then open `http://your-server:8765` in your browser.
+
+### Drop models for validation
 
 ```bash
-docker run --rm -p 8765:8765 \
-  -e OUROBOROS_FILE_BROWSER_DEFAULT=/workspace \
-  -v "$PWD:/workspace" \
-  ouroboros-web
+cp /path/to/model.zip ml-models-to-validate/
 ```
 
-Use a custom port via environment variables:
+The watcher detects new ZIPs automatically. Validation reports appear in the
+Docker volume at `/data/validations/<bundle_id>/results/`.
+
+### View logs and reports
 
 ```bash
-docker run --rm -p 9000:9000 \
-  -e OUROBOROS_SERVER_PORT=9000 \
-  -e OUROBOROS_FILE_BROWSER_DEFAULT=/workspace \
-  -v "$PWD:/workspace" \
-  ouroboros-web
+# Live logs
+docker compose logs -f --tail=100
+
+# Read a validation report
+docker compose exec valoboros cat /data/validations/<bundle_id>/results/report.md
+
+# List all validations
+docker compose exec valoboros python -c "
+from ouroboros.tools.model_intake import _list_validations_impl
+from pathlib import Path
+print(_list_validations_impl(Path('/data/validations')))
+"
 ```
 
-Run with launch arguments instead:
+### Stop and restart
 
 ```bash
-docker run --rm -p 9000:9000 \
-  -e OUROBOROS_FILE_BROWSER_DEFAULT=/workspace \
-  -v "$PWD:/workspace" \
-  ouroboros-web --port 9000
+docker compose down       # stop (data preserved in volumes)
+docker compose up -d      # start again
+docker compose restart    # restart without rebuilding
 ```
 
-Required/important environment variables:
+### Security features
+
+- Safety-critical files (`BIBLE.md`, `safety.py`, `registry.py`, `SAFETY.md`, `sandbox.py`)
+  are bind-mounted as **read-only** — the agent physically cannot modify them
+- Container runs as non-root user (`valoboros`, UID 1000)
+- All Linux capabilities dropped except `SYS_ADMIN` (needed for sandbox `unshare --net`)
+- Resource limits: 6 GB RAM, 4 CPU (configurable in `docker-compose.yml`)
+- `no-new-privileges` security option enabled
+
+### Environment variables
+
+Configure via `.env` file (copied from `.env.example`):
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OUROBOROS_NETWORK_PASSWORD` | Optional | Enables the non-loopback password gate when set |
-| `OUROBOROS_FILE_BROWSER_DEFAULT` | Defaults to `${APP_HOME}` in the image | Explicit root directory exposed in the Files tab |
-| `OUROBOROS_SERVER_PORT` | Optional | Override container listen port |
-| `OUROBOROS_SERVER_HOST` | Optional | Defaults to `0.0.0.0` in Docker |
+| `OPENROUTER_API_KEY` | Yes | LLM API key ([openrouter.ai/keys](https://openrouter.ai/keys)) |
+| `OUROBOROS_NETWORK_PASSWORD` | No | Password for remote web UI access |
+| `OPENAI_API_KEY` | No | For web search tool |
+| `ANTHROPIC_API_KEY` | No | For Claude Code CLI (advanced evolution) |
+| `TOTAL_BUDGET` | No | API spend limit in USD (default: $50) |
 
-Example: mount a host workspace and expose only that directory in Files:
+### Persistent data
+
+Data survives container rebuilds via Docker volumes:
+- `valoboros-data` — validations, knowledge base, settings, logs
+- `valoboros-repo` — agent's self-modified code repository
+
+**Warning:** `docker compose down -v` deletes volumes. Use `docker compose down` (without `-v`) to preserve data.
+
+To backup:
 
 ```bash
-docker run --rm -p 8765:8765 \
-  -e OUROBOROS_FILE_BROWSER_DEFAULT=/workspace \
-  -v "$PWD:/workspace" \
-  ouroboros-web
+docker run --rm -v valoboros-data:/data -v $(pwd)/backups:/backup \
+    alpine tar czf /backup/valoboros-data-$(date +%Y%m%d).tar.gz /data
 ```
+
+### Custom port
+
+```bash
+# In .env or via environment:
+OUROBOROS_SERVER_PORT=9000
+
+# Update docker-compose.yml ports:
+# ports:
+#   - "9000:9000"
+```
+
+---
+
+## Build
 
 ### macOS (.dmg)
 
