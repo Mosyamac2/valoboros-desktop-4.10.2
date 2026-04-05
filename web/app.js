@@ -12,6 +12,7 @@ import { createWS } from './modules/ws.js';
 import { loadVersion, initMatrixRain } from './modules/utils.js';
 import { initChat } from './modules/chat.js';
 import { initFiles } from './modules/files.js';
+import { initValidation } from './modules/validation.js';
 
 import { initLogs } from './modules/logs.js';
 import { initEvolution } from './modules/evolution.js';
@@ -95,6 +96,7 @@ const ctx = {
 
 initChat(ctx);
 initFiles(ctx);
+initValidation(ctx);
 
 initLogs(ctx);
 initEvolution(ctx);
