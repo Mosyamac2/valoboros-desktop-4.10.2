@@ -86,6 +86,16 @@ class ValidationPipeline:
         await self._install_dependencies(profile)
         self._log("Dependency installation complete.")
 
+        # --- Per-model literature research ---
+        if self._config.pre_research:
+            self._log("Searching for literature relevant to this model...")
+            research = await self._research_model(profile)
+            if research and research.relevant_papers:
+                self._log(f"Found {len(research.relevant_papers)} relevant papers, "
+                          f"{len(research.risk_insights)} risk insights")
+            else:
+                self._log("No relevant papers found (non-blocking, continuing).")
+
         # --- Methodology planning ---
         self._log("Starting methodology planning...")
         methodology = await self._plan_methodology(profile)
@@ -216,6 +226,41 @@ class ValidationPipeline:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    async def _research_model(self, profile: ModelProfile) -> Optional['ModelResearchResult']:
+        """Run per-model targeted literature research before methodology planning."""
+        if not self._config.pre_research:
+            return None
+        try:
+            from ouroboros.validation.model_researcher import ModelResearcher
+            knowledge_dir = self._bundle_dir.parent.parent / "memory" / "knowledge"
+            researcher = ModelResearcher(profile, knowledge_dir, self._config)
+            result = await researcher.research()
+            # Save to bundle's methodology/ dir
+            if result and (result.relevant_papers or result.risk_insights):
+                research_md = self._bundle_dir / "methodology" / "research.md"
+                research_md.parent.mkdir(parents=True, exist_ok=True)
+                lines = ["# Per-Model Literature Research\n"]
+                if result.risk_insights:
+                    lines.append("## Risk Insights\n")
+                    for r in result.risk_insights:
+                        lines.append(f"- {r}")
+                if result.applicable_techniques:
+                    lines.append("\n## Applicable Techniques\n")
+                    for t in result.applicable_techniques:
+                        lines.append(f"- {t}")
+                if result.relevant_papers:
+                    lines.append("\n## Relevant Papers\n")
+                    for p in result.relevant_papers:
+                        lines.append(f"- [{p.relevance_score:.1f}] {p.title}")
+                        lines.append(f"  {p.url}")
+                lines.append("")
+                research_md.write_text("\n".join(lines), encoding="utf-8")
+            return result
+        except Exception as exc:
+            self._log(f"Model research failed (non-blocking): {exc}")
+            log.warning("Per-model research failed: %s", exc)
+            return None
 
     async def _plan_methodology(self, profile: ModelProfile) -> Optional['MethodologyPlan']:
         """Run methodology planner to create a per-model validation plan."""

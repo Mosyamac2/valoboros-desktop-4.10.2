@@ -35,6 +35,9 @@ You are a model validation methodology expert.
 ## Knowledge Base — Relevant Patterns
 {knowledge}
 
+Note: If recent arxiv findings appear above, they were gathered specifically
+for this model. Consider them when designing the plan.
+
 ## Instructions
 Design a validation methodology for this specific model. Return a JSON object:
 {{
@@ -218,6 +221,15 @@ class MethodologyPlanner:
             try:
                 content = patterns_file.read_text(encoding="utf-8")[:3000]
                 parts.append(f"### {patterns_file.name}\n{content}")
+            except Exception:
+                pass
+
+        # Recent arxiv findings (from background scanner)
+        arxiv_file = self._knowledge_dir / "arxiv_recent.md"
+        if arxiv_file.exists():
+            try:
+                content = arxiv_file.read_text(encoding="utf-8")[:3000]
+                parts.append(f"### {arxiv_file.name}\n{content}")
             except Exception:
                 pass
 
