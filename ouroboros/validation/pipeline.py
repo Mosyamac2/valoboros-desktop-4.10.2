@@ -46,6 +46,7 @@ class ValidationPipeline:
         self._sandbox = ModelSandbox(self._bundle_dir, config)
         self._results_dir = self._bundle_dir / "results"
         self._results_dir.mkdir(parents=True, exist_ok=True)
+        (self._bundle_dir / "methodology" / "custom_checks").mkdir(parents=True, exist_ok=True)
 
     async def run(self) -> ValidationReport:
         """Execute the full validation pipeline."""
@@ -64,41 +65,60 @@ class ValidationPipeline:
         # --- Auto-install detected dependencies before S1 ---
         await self._install_dependencies(profile)
 
-        # --- S1: Reproducibility (HARD GATE for S2-S7) ---
+        # --- Methodology planning ---
+        methodology = await self._plan_methodology(profile)
+        active_stages = self._get_active_stages(methodology)
+
+        # --- S1: Reproducibility (HARD GATE for S2-S7, always runs) ---
         s1_result = await self._run_stage_module("reproducibility", "S1", profile)
         stages.append(s1_result)
         self._save_stage(s1_result)
         s1_passed = s1_result.status == "passed"
 
-        # --- S2-S7: Run if S1 passed (sandbox-dependent stages) ---
+        # --- S2-S7: Run if S1 passed AND stage is in methodology plan ---
+        sandbox_stages = [
+            ("performance", "S2", "Performance"),
+            ("fit_quality", "S3", "Fit Quality"),
+            ("sensitivity", "S6", "Sensitivity"),
+            ("robustness", "S7", "Robustness"),
+        ]
         if s1_passed:
-            for module_name, stage_id in [
-                ("performance", "S2"),
-                ("fit_quality", "S3"),
-                ("sensitivity", "S6"),
-                ("robustness", "S7"),
-            ]:
-                result = await self._run_stage_module(module_name, stage_id, profile)
-                stages.append(result)
-                self._save_stage(result)
+            for module_name, stage_id, stage_name in sandbox_stages:
+                if stage_id in active_stages:
+                    result = await self._run_stage_module(module_name, stage_id, profile)
+                    stages.append(result)
+                    self._save_stage(result)
+                else:
+                    stages.append(ValidationStageResult(
+                        stage=stage_id, stage_name=stage_name, status="skipped",
+                        checks=[], duration_sec=0.0,
+                        error_message=f"Skipped by methodology plan.",
+                    ))
         else:
-            for stage_id, name in [("S2", "Performance"), ("S3", "Fit Quality"),
-                                    ("S6", "Sensitivity"), ("S7", "Robustness")]:
+            for _, stage_id, stage_name in sandbox_stages:
                 stages.append(ValidationStageResult(
-                    stage=stage_id, stage_name=name, status="skipped",
+                    stage=stage_id, stage_name=stage_name, status="skipped",
                     checks=[], duration_sec=0.0,
                     error_message="Skipped — S1 reproducibility failed.",
                 ))
 
-        # --- S4, S5, S8: Run even if S1 failed (code-only / deterministic) ---
-        for module_name, stage_id in [
-            ("leakage", "S4"),
-            ("fairness", "S5"),
-            ("code_quality", "S8"),
-        ]:
-            result = await self._run_stage_module(module_name, stage_id, profile)
-            stages.append(result)
-            self._save_stage(result)
+        # --- S4, S5, S8: Run even if S1 failed, if in methodology plan ---
+        deterministic_stages = [
+            ("leakage", "S4", "Data Leakage"),
+            ("fairness", "S5", "Bias & Fairness"),
+            ("code_quality", "S8", "Code Quality"),
+        ]
+        for module_name, stage_id, stage_name in deterministic_stages:
+            if stage_id in active_stages:
+                result = await self._run_stage_module(module_name, stage_id, profile)
+                stages.append(result)
+                self._save_stage(result)
+            else:
+                stages.append(ValidationStageResult(
+                    stage=stage_id, stage_name=stage_name, status="skipped",
+                    checks=[], duration_sec=0.0,
+                    error_message=f"Skipped by methodology plan.",
+                ))
 
         # --- S9: Synthesis (receives prior stage results) ---
         from ouroboros.validation.synthesis import run_stage as synthesis_run
@@ -154,6 +174,45 @@ class ValidationPipeline:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    async def _plan_methodology(self, profile: ModelProfile) -> Optional['MethodologyPlan']:
+        """Run methodology planner to create a per-model validation plan."""
+        try:
+            from ouroboros.validation.methodology_planner import MethodologyPlanner
+            knowledge_dir = self._bundle_dir.parent.parent / "memory" / "knowledge"
+            planner = MethodologyPlanner(
+                self._bundle_dir, profile, self._check_registry,
+                self._config, knowledge_dir,
+            )
+            methodology = await planner.plan()
+            log.info(
+                "Methodology plan: %d checks to run, %d to skip, %d to create",
+                len(methodology.checks_to_run),
+                len(methodology.checks_to_skip),
+                len(methodology.checks_to_create),
+            )
+            return methodology
+        except Exception as exc:
+            log.warning("Methodology planning failed: %s", exc)
+            return None
+
+    @staticmethod
+    def _get_active_stages(methodology: Optional['MethodologyPlan']) -> set[str]:
+        """Extract which stages (S0-S8) should run from the methodology plan.
+
+        If no plan, all stages are active (default behavior).
+        S0, S1, S9 always run regardless of the plan.
+        """
+        if methodology is None:
+            return {"S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"}
+        # Extract stage prefixes from checks_to_run
+        stages = {"S0", "S1", "S9"}  # always active
+        for check_id in methodology.checks_to_run:
+            # Check IDs look like "S2.OOS_METRICS" — extract the "S2" part
+            parts = check_id.split(".")
+            if parts and parts[0].startswith("S"):
+                stages.add(parts[0])
+        return stages
 
     async def _install_dependencies(self, profile: ModelProfile) -> None:
         """Install detected dependencies into the sandbox venv before S1."""
