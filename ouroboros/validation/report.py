@@ -80,7 +80,45 @@ class ReportGenerator:
             lines.append(f"| {s.stage} | {s.stage_name} | {s.status} | {total} | {failed} |")
         lines.append("")
 
-        # Critical findings
+        # Separate qualitative (S0, S4 code-level, S8) and quantitative (S2, S3, S5, S6, S7) findings
+        qualitative_stages = {"S0", "S4", "S8", "S1"}
+        quantitative_stages = {"S2", "S3", "S5", "S6", "S7"}
+
+        qual_findings = []
+        quant_findings = []
+        for s in report.stages:
+            for c in s.checks:
+                if not c.passed:
+                    if s.stage in qualitative_stages:
+                        qual_findings.append(c)
+                    elif s.stage in quantitative_stages:
+                        quant_findings.append(c)
+                    else:
+                        qual_findings.append(c)  # default to qualitative
+
+        # Qualitative findings
+        if qual_findings:
+            lines.append("## Qualitative Analysis Findings")
+            lines.append("")
+            lines.append("Architecture, target formulation, data pipeline, code quality:")
+            lines.append("")
+            for f in qual_findings:
+                sev = f"[{f.severity}]" if f.severity != "pass" else ""
+                lines.append(f"- **{f.check_id}** {sev}: {f.details}")
+            lines.append("")
+
+        # Quantitative findings
+        if quant_findings:
+            lines.append("## Quantitative Analysis Findings")
+            lines.append("")
+            lines.append("Metrics, sensitivity, stability, drill-downs:")
+            lines.append("")
+            for f in quant_findings:
+                score_str = f" (score: {f.score})" if f.score is not None else ""
+                lines.append(f"- **{f.check_id}**{score_str}: {f.details}")
+            lines.append("")
+
+        # Critical findings (across both blocks)
         if report.critical_findings:
             lines.append("## Critical Findings")
             lines.append("")

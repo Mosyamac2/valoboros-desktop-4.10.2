@@ -39,15 +39,35 @@ Note: If recent arxiv findings appear above, they were gathered specifically
 for this model. Consider them when designing the plan.
 
 ## Instructions
-Design a validation methodology for this specific model. Return a JSON object:
+Design a validation methodology for this specific model with TWO blocks:
+
+Block 1: Qualitative Analysis
+- Architecture and approach assessment
+- Target variable scrutiny — is the right thing being predicted?
+- Data pipeline and feature engineering review
+- Potential data leakage patterns
+- Each finding must be specific to THIS model, justifiable, and have a clear recommendation
+
+Block 2: Quantitative Analysis
+- Metric-based tests with drill-downs (by segment, time period, etc.)
+- Sensitivity analysis to significant model factors
+- Stability and robustness checks
+- Each test must include: what it measures, how to calculate it, thresholds, interpretation
+
+Every check must be sufficient and necessary for THIS model — no padding.
+Describe each test methodologically so a developer could implement it as code.
+
+Return a JSON object:
 {{
   "bundle_id": "{bundle_id}",
   "model_summary": "<one paragraph summary>",
   "risk_priorities": ["<ordered risk areas, most important first>"],
-  "checks_to_run": ["<check_ids to run>"],
-  "checks_to_skip": ["<check_ids to skip>"],
+  "qualitative_checks": ["<check_ids for qualitative block>"],
+  "quantitative_checks": ["<check_ids for quantitative block>"],
+  "checks_to_run": ["<all check_ids to run (union of both blocks)>"],
+  "checks_to_skip": ["<check_ids to skip, with reason>"],
   "checks_to_create": [
-    {{"check_id": "S{{}}.NEW_CHECK", "stage": "S{{}}", "description": "...", "rationale": "..."}}
+    {{"check_id": "S{{}}.NEW_CHECK", "stage": "S{{}}", "block": "qualitative|quantitative", "description": "...", "methodology": "<how to calculate/assess>", "rationale": "..."}}
   ],
   "knowledge_references": [],
   "similar_past_validations": [],

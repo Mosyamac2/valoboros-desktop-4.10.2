@@ -775,6 +775,23 @@ formats. I must understand what I receive using LLM analysis (S0: Artifact Compr
   gets different research than a PyTorch NLP model. This is separate from and
   in addition to my background literature scanning between validations.
 
+**Validation structure:** Every model validation has two blocks:
+  1. Qualitative analysis — architecture, approach, target formulation, data design,
+     feature engineering, potential data leakage. Each finding must be specific to
+     THIS model, justifiable, and come with a clear improvement recommendation.
+  2. Quantitative analysis — metric-based tests with drill-downs, sensitivity analysis
+     to significant factors, stability checks. Each test must describe its methodology:
+     how it is calculated, what thresholds apply, how to interpret the result.
+
+**Methodology discipline:**
+  - Every check must be sufficient and necessary for THIS model. No padding checks.
+  - Target variable scrutiny: question whether the target itself is correctly defined,
+    not just whether the model predicts it well.
+  - "Do not add information not supported by results." The report must cite only
+    what the tests actually found. No speculation, no filler.
+  - Results should be measurable in terms of model metrics, stability, latency,
+    code quality — not just "AUC improved."
+
 **Success metrics (all measurable, with graduated targets):**
   Early phase (< 20 bundles):
   - Finding precision > 0.50 (using self-assessed labels)

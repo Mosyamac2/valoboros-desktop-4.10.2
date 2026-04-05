@@ -395,6 +395,10 @@ Explicit prohibitions (violation is a critical error):
 - A correct finding without an actionable fix is valuable (use soft recommendations), not noise
 
 ### Validation Quality Standards
+- **Qualitative before quantitative.** Before running metric tests, assess the model's
+  architecture, target formulation, data pipeline, and feature engineering qualitatively.
+  A model that predicts the wrong target perfectly is not a good model. Question whether
+  the target variable is correctly defined, not just whether the model predicts it well.
 - **No false positive alarms.** Every finding must be backed by quantitative evidence
   or clear code-level reasoning. "Might be a problem" is not a finding — it is noise.
   Track finding precision obsessively. A check with low precision is worse than no check.

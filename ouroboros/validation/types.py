@@ -260,7 +260,9 @@ class MethodologyPlan:
     bundle_id: str = ""
     model_summary: str = ""
     risk_priorities: list[str] = field(default_factory=list)
-    checks_to_run: list[str] = field(default_factory=list)
+    qualitative_checks: list[str] = field(default_factory=list)   # architecture, target, leakage, code quality
+    quantitative_checks: list[str] = field(default_factory=list)  # metrics, sensitivity, stability, drill-downs
+    checks_to_run: list[str] = field(default_factory=list)        # union of both blocks
     checks_to_skip: list[str] = field(default_factory=list)
     checks_to_create: list[dict[str, Any]] = field(default_factory=list)
     knowledge_references: list[str] = field(default_factory=list)
