@@ -575,6 +575,7 @@ validation_data/validations/<bundle_id>/
 │   ├── model_profile.json     ← LLM-inferred model understanding
 │   └── dependency_report.json ← AST-extracted dependencies
 ├── methodology/
+│   ├── research.md            ← per-model arxiv research findings
 │   ├── methodology.md         ← human-readable validation plan
 │   ├── methodology_plan.json  ← structured plan
 │   └── custom_checks/         ← checks created for this model
@@ -614,6 +615,10 @@ All settings can be set via environment variables or `ValidationConfig`:
 | `max_hard_recommendations` | `10` | Cap on implementable recommendations |
 | `max_soft_recommendations` | `10` | Cap on informational recommendations |
 | `inbox_dir` | `ml-models-to-validate` | Folder to watch for new model ZIPs |
+| `auto_ingest` | `True` | Whether watcher auto-ingests new ZIPs |
+| `pre_research` | `True` | Enable per-model arxiv research before validation |
+| `research_max_queries` | `3` | Max arxiv queries per model |
+| `research_max_papers` | `5` | Max papers to assess per model |
 
 **Cost-saving tip:** Use `anthropic/claude-sonnet-4` instead of `opus` for all
 models during testing. Sonnet is ~10x cheaper and works well for validation tasks.
@@ -645,8 +650,9 @@ Everything that isn't in `SAFETY_CRITICAL_PATHS` is fair game:
 - **Validation checks** — create new ones, edit existing ones, delete useless ones
   (via `create_validation_check`, `edit_validation_check`, `delete_validation_check` tools,
   or by directly editing files in `ouroboros/validation/checks/`)
-- **The literature scanner** — including the hardcoded arxiv queries, the relevance
-  keywords, the scoring heuristic, or the entire scanning approach
+- **Both literature scanners** — the background scanner (static queries, between
+  validations) and the per-model researcher (dynamic queries, during pipeline).
+  Including queries, relevance scoring, LLM synthesis prompts, or the entire approach
 - **Stage orchestrators** — can rewrite how S0-S9 work
 - **The synthesis prompt** — can improve how recommendations are generated
 - **The methodology planner** — can change how validation plans are designed
@@ -654,8 +660,11 @@ Everything that isn't in `SAFETY_CRITICAL_PATHS` is fair game:
 
 ### Example: How Valoboros could improve its own literature scanning
 
-Currently, the arxiv queries are static (7 hardcoded queries in
-`ouroboros/validation/literature_scanner.py`):
+Valoboros has two literature scanning mechanisms:
+1. **Background scanner** (`literature_scanner.py`) — 7 static queries, between validations
+2. **Per-model researcher** (`model_researcher.py`) — dynamic queries from model profile, during pipeline
+
+The background scanner's queries are currently static:
 
 ```python
 _ARXIV_QUERIES = [
@@ -704,9 +713,14 @@ When Ouroboros runs as a full agent (via `launcher.py` → `server.py` → web U
 the background consciousness loop wakes up periodically and can:
 - Scan the inbox for new models (watcher)
 - Reflect on past validations (reflection engine)
-- Search arxiv for new techniques (literature scanner)
+- Search arxiv for new techniques (background literature scanner)
 - Evolve the methodology (methodology evolver)
 - Rewrite any of its own code (Ouroboros self-modification)
+
+Note: The per-model researcher runs DURING each pipeline execution (not in
+consciousness). It generates targeted queries from the model profile and
+enriches the knowledge base before the methodology planner runs. This
+happens automatically in both pipeline mode and full agent mode.
 
 **The self-improvement only happens in full agent mode.** Pipeline mode is a
 snapshot execution of the current methodology.

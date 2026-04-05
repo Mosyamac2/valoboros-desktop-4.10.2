@@ -36,12 +36,18 @@ Most AI validation tools run a static checklist. Valoboros **creates its own che
 
 - **LLM-Powered Artifact Comprehension** — Receives raw ZIPs of .py/.ipynb files and data samples. No manifests, no standard format required. The LLM analyzes the code to infer model type, framework, target variable, features, preprocessing, and dependencies.
 - **Deterministic Dependency Extraction** — AST-based scanner extracts all imports from code before the LLM call. Maps import names to pip packages (e.g., `sklearn` → `scikit-learn`). Auto-installs into sandbox before execution.
+- **Per-Model Literature Research** — Before validation, searches arxiv with queries dynamically generated from the model profile (algorithm, framework, task domain, detected risks). Scores relevance against THIS model. LLM synthesizes risk insights for the methodology planner. Separate from background scanning.
+- **Per-Model Methodology Planning** — LLM designs a custom validation plan for each model: which checks to run, which to skip, which to create, risk priorities. Uses knowledge base + per-model research. Falls back to heuristic selection if LLM is unavailable.
 - **10-Stage Validation Pipeline** — S0 (comprehension) → S1 (reproducibility) → S2 (OOS performance) → S3 (overfit/underfit) → S4 (data leakage) → S5 (bias/fairness) → S6 (feature sensitivity) → S7 (robustness) → S8 (code quality) → S9 (synthesis + improvement plan).
 - **Dynamic Check Registry** — Validation checks are individual `.py` files the agent can create, edit, disable, and delete. 9 seed checks + unlimited agent-created checks.
 - **Hard & Soft Recommendations** — Hard recs are specific, implementable code changes with estimated metric impact. Soft recs are genuine observations that require human action (e.g., "collect more data"). Both have value; neither pollutes the other's metrics.
 - **Validate → Improve → Revalidate Loop** — Side agent implements hard recommendations, re-runs validation, measures actual improvement lift. This is the ground truth for recommendation quality.
 - **Four-Tier Feedback** — Tier 0 (LLM self-assessment, weight 0.3), Tier 1 (improvement lift), Tier 2 (human expert, weight 1.0), Tier 3 (LLM cross-check). Finding quality and recommendation quality tracked independently.
 - **Graduated Evolution** — Early phase (< 20 bundles): evolve freely, experiment. Mature phase: require measurable metric improvement before committing methodology changes.
+- **Folder Watcher** — Monitors inbox folder for new model ZIPs, auto-ingests with processed tracking. Integrates with background consciousness.
+- **Cross-Validation Reflection** — Analyzes past validations to find patterns, detect dead/hot checks, and write insights to knowledge base.
+- **Background Literature Scanning** — Searches arxiv with 7 rotating queries between validations. Keyword-based relevance scoring at zero LLM cost. Complements per-model research.
+- **Methodology Evolution** — Automatically creates, fixes, or disables validation checks based on effectiveness data and arxiv findings.
 - **Secure Sandbox** — Untrusted model code runs in isolated subprocesses with RLIMIT_AS/RLIMIT_CPU resource limits, stdout/stderr truncation, and optional network isolation (unshare --net on Linux).
 
 ### Ouroboros Core (inherited)
@@ -247,6 +253,12 @@ Ouroboros (Valoboros)
 │   │   ├── effectiveness.py — Four-tier feedback tracking
 │   │   ├── self_assessment.py — Tier 0 self-labeling
 │   │   ├── model_improver.py — Side agent for hard recommendations
+│   │   ├── model_researcher.py — Per-model targeted arxiv research
+│   │   ├── methodology_planner.py — Custom per-model validation plan
+│   │   ├── watcher.py       — Folder watcher for auto-ingestion
+│   │   ├── reflection_engine.py — Cross-validation pattern learning
+│   │   ├── literature_scanner.py — Background arxiv scanning
+│   │   ├── methodology_evolver.py — Autonomous check evolution
 │   │   └── checks/          — Evolvable check files + manifest
 │   └── tools/
 │       ├── model_intake.py  — ingest_model_artifacts, list_validations
@@ -371,7 +383,9 @@ cat validation_data/validations/<bundle_id>/results/report.md
 
 **Input:** A ZIP of `.py`/`.ipynb` files (model code) + optionally a ZIP of data samples + a task description. No manifest required — the LLM figures out the rest.
 
-**Output:** Per-model folder with `model_profile.json` (inferred schema), `report.json` + `report.md` (findings and recommendations), `improvement/plan.json` (hard/soft recs).
+**Output:** Per-model folder with `model_profile.json` (inferred schema), `methodology/research.md` (arxiv findings), `methodology/methodology.md` (validation plan), `report.json` + `report.md` (findings and recommendations), `improvement/plan.json` (hard/soft recs), `validation.log` (timestamped execution trace).
+
+**Pipeline:** S0 comprehension → dependency install → per-model arxiv research → methodology planning → S1-S9 checks → synthesis → report → self-assessment.
 
 ---
 
