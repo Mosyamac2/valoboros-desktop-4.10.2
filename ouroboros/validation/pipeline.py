@@ -113,6 +113,17 @@ class ValidationPipeline:
         # Save via ReportGenerator
         from ouroboros.validation.report import ReportGenerator
         ReportGenerator().save(report, self._bundle_dir, self._config)
+
+        # --- Tier 0 self-assessment (if enabled) ---
+        if self._config.auto_self_assess:
+            try:
+                from ouroboros.validation.self_assessment import run_self_assessment
+                from ouroboros.validation.effectiveness import EffectivenessTracker
+                tracker = EffectivenessTracker(self._bundle_dir.parent)
+                await run_self_assessment(self._bundle_dir, report, self._config, tracker)
+            except Exception as exc:
+                log.warning("Self-assessment failed: %s", exc)
+
         return report
 
     async def run_single_stage(self, stage: str) -> ValidationStageResult:
