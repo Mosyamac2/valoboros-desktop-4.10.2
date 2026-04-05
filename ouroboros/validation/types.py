@@ -277,6 +277,48 @@ class MethodologyPlan:
 
 
 # ---------------------------------------------------------------------------
+# PaperSummary
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PaperSummary:
+    arxiv_id: str = ""
+    title: str = ""
+    abstract: str = ""
+    url: str = ""
+    relevance_score: float = 0.0
+    applicable_technique: str = ""
+    proposed_check_idea: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> PaperSummary:
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+# ---------------------------------------------------------------------------
+# EvolutionAction
+# ---------------------------------------------------------------------------
+
+@dataclass
+class EvolutionAction:
+    action_type: str = ""    # "fix_check" | "create_check" | "delete_check" | "improve_synthesis"
+    check_id: str = ""
+    description: str = ""
+    success: bool = False
+    error_message: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> EvolutionAction:
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+# ---------------------------------------------------------------------------
 # ReflectionResult
 # ---------------------------------------------------------------------------
 
