@@ -1906,3 +1906,193 @@ body {
         max-height: none;
     }
 }
+
+/* =========================================================================
+   Validation Tab (Valoboros)
+   ========================================================================= */
+
+.validation-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 24px;
+    max-width: 960px;
+}
+
+.validation-layout h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--text-primary);
+}
+
+/* --- Upload zone --- */
+.upload-section { display: flex; flex-direction: column; gap: 12px; }
+
+.upload-zone {
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: border-color 0.2s, background 0.2s;
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-secondary);
+}
+.upload-zone:hover {
+    border-color: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.04);
+}
+.upload-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+.upload-zone .upload-icon { opacity: 0.5; }
+.upload-zone .upload-hint { font-size: 0.85rem; color: var(--text-muted); }
+
+#val-task {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+#val-task:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.upload-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.upload-actions .btn-primary {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+.upload-actions .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+#val-upload-status { font-size: 0.85rem; color: var(--text-secondary); }
+#val-upload-status.status-error { color: #f07a86; }
+#val-upload-status.status-validating { color: #7ab8f0; }
+#val-upload-status.status-completed { color: #7af0a0; }
+
+/* --- Validation list table --- */
+.validations-section { }
+
+#val-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+#val-table th {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+#val-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+#val-table .bundle-id {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+#val-table .task-cell {
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.empty-state {
+    padding: 24px;
+    text-align: center;
+    color: var(--text-muted);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+}
+
+/* --- Status badges --- */
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+.status-pending { background: rgba(255, 255, 255, 0.1); color: var(--text-secondary); }
+.status-validating { background: rgba(100, 160, 255, 0.2); color: #7ab8f0; }
+.status-completed { background: rgba(100, 240, 160, 0.15); color: #7af0a0; }
+.status-failed, .status-error { background: rgba(240, 100, 100, 0.15); color: #f07a86; }
+
+.verdict-approved { color: #7af0a0; font-weight: 600; }
+.verdict-conditional { color: #f0d07a; font-weight: 600; }
+.verdict-rejected { color: #f07a86; font-weight: 600; }
+
+/* --- Action buttons --- */
+.btn-small {
+    padding: 4px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.btn-small:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); }
+.btn-small.btn-primary { border-color: var(--accent-dim); }
+
+/* --- Report viewer --- */
+.report-section {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+}
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.report-header h2 { margin: 0; }
+.report-viewer {
+    padding: 16px;
+    max-height: 600px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    margin: 0;
+}

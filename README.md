@@ -162,6 +162,14 @@ cp /path/to/model.zip ml-models-to-validate/
 The watcher detects new ZIPs automatically. Validation reports appear in the
 Docker volume at `/data/validations/<bundle_id>/results/`.
 
+### Upload via web UI
+
+Navigate to the **Validation** tab in the web UI to:
+- Drag-and-drop model ZIP files for validation
+- Add a task description
+- Monitor validation progress in real-time
+- View validation reports in-browser
+
 ### View logs and reports
 
 ```bash

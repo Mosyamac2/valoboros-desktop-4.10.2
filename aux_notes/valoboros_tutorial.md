@@ -56,6 +56,21 @@ print(f"Bundle ID: {bundle_id}")
 
 **Result:** A bundle directory at `validation_data/validations/<bundle_id>/`
 
+### Alternative: Upload via Web UI
+
+Instead of using Python scripts, you can upload models through the web UI:
+
+1. Open `http://your-server:8765` in your browser
+2. Click the **Validation** tab (checkmark icon in the sidebar)
+3. Drag your model ZIP into the upload zone (or click to browse)
+4. Type a task description (e.g., "Predict early repayment rate for consumer loans")
+5. Click **"Upload & Validate"**
+6. Watch the validation progress in the list below
+7. Click **"View Report"** when complete
+
+The web UI upload calls the same ingestion and pipeline code as the Python API.
+Files land in `DATA_DIR/ml-models-to-validate/` and are processed identically.
+
 ### Step 2: Run the full pipeline
 
 ```python
