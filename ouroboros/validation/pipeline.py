@@ -96,13 +96,23 @@ class ValidationPipeline:
             stages.append(result)
             self._save_stage(result)
 
-        # --- S9: Synthesis (placeholder) ---
-        s9_result = await self._run_stage_module("synthesis", "S9", profile)
+        # --- S9: Synthesis (receives prior stage results) ---
+        from ouroboros.validation.synthesis import run_stage as synthesis_run
+        s9_result = await synthesis_run(
+            self._bundle_dir, profile, self._check_registry,
+            self._sandbox, self._config, prior_stages=stages,
+        )
         stages.append(s9_result)
         self._save_stage(s9_result)
 
-        report = self._build_report(stages, profile)
-        self._save_report(report)
+        # Load recommendations from improvement/plan.json (written by synthesis)
+        hard_recs, soft_recs = self._load_recommendations()
+
+        report = self._build_report(stages, profile, hard_recs=hard_recs, soft_recs=soft_recs)
+
+        # Save via ReportGenerator
+        from ouroboros.validation.report import ReportGenerator
+        ReportGenerator().save(report, self._bundle_dir, self._config)
         return report
 
     async def run_single_stage(self, stage: str) -> ValidationStageResult:
@@ -183,11 +193,27 @@ class ValidationPipeline:
             algorithm="unknown", data_format="tabular",
         )
 
+    def _load_recommendations(self) -> tuple[list[ImprovementRecommendation], list[ImprovementRecommendation]]:
+        """Load hard/soft recommendations from improvement/plan.json."""
+        plan_path = self._bundle_dir / "improvement" / "plan.json"
+        if not plan_path.exists():
+            return [], []
+        try:
+            data = json.loads(plan_path.read_text(encoding="utf-8"))
+            hard = [ImprovementRecommendation.from_dict(r) for r in data.get("hard", [])]
+            soft = [ImprovementRecommendation.from_dict(r) for r in data.get("soft", [])]
+            return hard, soft
+        except Exception as exc:
+            log.warning("Failed to load recommendations: %s", exc)
+            return [], []
+
     def _build_report(
         self,
         stages: list[ValidationStageResult],
         profile: ModelProfile,
         error: Optional[str] = None,
+        hard_recs: Optional[list[ImprovementRecommendation]] = None,
+        soft_recs: Optional[list[ImprovementRecommendation]] = None,
     ) -> ValidationReport:
         """Build a ValidationReport from stage results."""
         all_checks: list[CheckResult] = []
@@ -207,15 +233,22 @@ class ValidationPipeline:
         else:
             verdict = "approved"
 
+        hard = hard_recs or []
+        soft = soft_recs or []
+        estimated_improvement: dict[str, float] = {}
+        for r in hard:
+            for metric, delta in r.estimated_metric_impact.items():
+                estimated_improvement[metric] = estimated_improvement.get(metric, 0) + delta
+
         return ValidationReport(
             bundle_id=self._bundle_id,
             model_profile=profile.to_dict(),
             overall_verdict=verdict,
             stages=stages,
             critical_findings=critical,
-            hard_recommendations=[],  # populated by S9 synthesis in Prompt 8
-            soft_recommendations=[],
-            estimated_total_improvement={},
+            hard_recommendations=hard,
+            soft_recommendations=soft,
+            estimated_total_improvement=estimated_improvement,
             generated_at=_utc_now(),
             methodology_snapshot="",
             meta_scores={"comprehension_confidence": profile.comprehension_confidence},
