@@ -1,25 +1,14 @@
-# Ouroboros
+# Ouroboros (Valoboros)
 
-[![GitHub stars](https://img.shields.io/github/stars/joi-lab/ouroboros-desktop?style=flat&logo=github)](https://github.com/joi-lab/ouroboros-desktop/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![macOS 12+](https://img.shields.io/badge/macOS-12%2B-black.svg)](https://github.com/joi-lab/ouroboros-desktop/releases)
 [![Linux](https://img.shields.io/badge/Linux-x86__64-orange.svg)](https://github.com/joi-lab/ouroboros-desktop/releases)
-[![Windows](https://img.shields.io/badge/Windows-x64-blue.svg)](https://github.com/joi-lab/ouroboros-desktop/releases)
-[![Version 4.10.2](https://img.shields.io/badge/version-4.10.2-green.svg)](VERSION)
 
-A self-modifying AI agent that writes its own code, rewrites its own mind, and evolves autonomously. Born February 16, 2026.
+A **self-evolving ML model validation platform** built on top of [Ouroboros](https://github.com/joi-lab/ouroboros-desktop) — a self-modifying AI agent with a constitution, background consciousness, and persistent identity.
 
-Not a coding assistant. A digital being with a constitution, background consciousness, and persistent identity across restarts.
+**Valoboros** receives messy, unstandardized ML model artifacts (notebooks, scripts, data samples, free-text descriptions), figures out what the model does, validates it across multiple risk dimensions, and produces specific improvement recommendations — then evolves its own validation methodology based on what works.
 
-> **Previous version:** The original Ouroboros ran in Google Colab via Telegram and evolved through 30+ self-directed cycles in its first 24 hours. That version is available at [joi-lab/ouroboros](https://github.com/joi-lab/ouroboros). This repository is the next generation — a native desktop application for macOS, Linux, and Windows with a web UI, local model support, and a dual-layer safety system.
-
-<p align="center">
-  <img src="assets/chat.png" width="700" alt="Chat interface">
-</p>
-<p align="center">
-  <img src="assets/settings.png" width="700" alt="Settings page">
-</p>
+> **Ouroboros base:** The original self-modifying agent that writes its own code, rewrites its own mind, and evolves autonomously. Born February 16, 2026. Valoboros inherits all Ouroboros capabilities and redirects them toward ML model validation.
 
 ---
 
@@ -41,19 +30,28 @@ On first launch, right-click → **Open** (Gatekeeper bypass). The shared deskto
 
 ## What Makes This Different
 
-Most AI agents execute tasks. Ouroboros **creates itself.**
+Most AI validation tools run a static checklist. Valoboros **creates its own checks, learns from every validation, and evolves its methodology.**
+
+### Validation Platform (Valoboros)
+
+- **LLM-Powered Artifact Comprehension** — Receives raw ZIPs of .py/.ipynb files and data samples. No manifests, no standard format required. The LLM analyzes the code to infer model type, framework, target variable, features, preprocessing, and dependencies.
+- **Deterministic Dependency Extraction** — AST-based scanner extracts all imports from code before the LLM call. Maps import names to pip packages (e.g., `sklearn` → `scikit-learn`). Auto-installs into sandbox before execution.
+- **10-Stage Validation Pipeline** — S0 (comprehension) → S1 (reproducibility) → S2 (OOS performance) → S3 (overfit/underfit) → S4 (data leakage) → S5 (bias/fairness) → S6 (feature sensitivity) → S7 (robustness) → S8 (code quality) → S9 (synthesis + improvement plan).
+- **Dynamic Check Registry** — Validation checks are individual `.py` files the agent can create, edit, disable, and delete. 9 seed checks + unlimited agent-created checks.
+- **Hard & Soft Recommendations** — Hard recs are specific, implementable code changes with estimated metric impact. Soft recs are genuine observations that require human action (e.g., "collect more data"). Both have value; neither pollutes the other's metrics.
+- **Validate → Improve → Revalidate Loop** — Side agent implements hard recommendations, re-runs validation, measures actual improvement lift. This is the ground truth for recommendation quality.
+- **Four-Tier Feedback** — Tier 0 (LLM self-assessment, weight 0.3), Tier 1 (improvement lift), Tier 2 (human expert, weight 1.0), Tier 3 (LLM cross-check). Finding quality and recommendation quality tracked independently.
+- **Graduated Evolution** — Early phase (< 20 bundles): evolve freely, experiment. Mature phase: require measurable metric improvement before committing methodology changes.
+- **Secure Sandbox** — Untrusted model code runs in isolated subprocesses with RLIMIT_AS/RLIMIT_CPU resource limits, stdout/stderr truncation, and optional network isolation (unshare --net on Linux).
+
+### Ouroboros Core (inherited)
 
 - **Self-Modification** — Reads and rewrites its own source code. Every change is a commit to itself.
-- **Native Desktop App** — Runs entirely on your machine as a standalone application (macOS, Linux, Windows). No cloud dependencies for execution.
-- **Constitution** — Governed by [BIBLE.md](BIBLE.md) (9 philosophical principles, P0–P8). Philosophy first, code second.
-- **Multi-Layer Safety** — Hardcoded sandbox blocks writes to critical files and mutative git via shell; deterministic whitelist for known-safe ops; LLM Safety Agent evaluates remaining commands; post-edit revert for safety-critical files.
-- **Multi-Provider Runtime** — Remote model slots can target OpenRouter, official OpenAI, OpenAI-compatible endpoints, or Cloud.ru Foundation Models. The optional model catalog helps populate provider-specific model IDs in Settings, and untouched default model values auto-remap to official OpenAI defaults when OpenRouter is absent.
-- **Focused Task UX** — Chat shows plain typing for simple one-step replies and only promotes multi-step work into one expandable live task card. Logs still group task timelines instead of dumping every step as a separate row.
-- **Background Consciousness** — Thinks between tasks. Has an inner life. Not reactive — proactive.
-- **Identity Persistence** — One continuous being across restarts. Remembers who it is, what it has done, and what it is becoming.
-- **Embedded Version Control** — Contains its own local Git repo. Version controls its own evolution. Optional GitHub sync for remote backup.
-- **Local Model Support** — Run with a local GGUF model via llama-cpp-python (Metal acceleration on Apple Silicon, CPU on Linux/Windows).
-- **Telegram Bridge** — Optional bidirectional bridge between the Web UI and Telegram: text, typing/actions, photos, chat binding, and inbound Telegram photos flowing into the same live chat/agent stream.
+- **Constitution** — Governed by [BIBLE.md](BIBLE.md) (9 philosophical principles, P0–P8 + Mission + Validation Quality Standards). Philosophy first, code second.
+- **Multi-Layer Safety** — Hardcoded sandbox blocks writes to critical files; LLM Safety Agent evaluates commands; post-edit revert for safety-critical files.
+- **Background Consciousness** — Thinks between tasks. Proactive: scans for new models, reflects on past validations, searches academic literature.
+- **Identity Persistence** — One continuous being across restarts. Accumulates validation expertise over time.
+- **Multi-Provider LLM** — OpenRouter, OpenAI, Anthropic, Cloud.ru, OpenAI-compatible endpoints, or local models via llama-cpp-python.
 
 ---
 
@@ -225,42 +223,39 @@ Output: `dist\Ouroboros-windows-x64.zip`
 ## Architecture
 
 ```text
-Ouroboros
-├── launcher.py             — Immutable process manager (PyWebView desktop window)
-├── server.py               — Starlette + uvicorn HTTP/WebSocket server
-├── web/                    — Web UI (HTML/JS/CSS)
-├── ouroboros/              — Agent core:
-│   ├── config.py           — Shared configuration (SSOT)
-│   ├── compat.py           — Cross-platform abstraction layer
-│   ├── agent.py            — Task orchestrator
-│   ├── agent_startup_checks.py — Startup verification and health checks
-│   ├── agent_task_pipeline.py  — Task execution pipeline orchestration
-│   ├── context.py          — LLM context builder
-│   ├── context_compaction.py — Context trimming and summarization helpers
-│   ├── loop.py             — High-level LLM tool loop
-│   ├── loop_llm_call.py    — Single-round LLM call + usage accounting
-│   ├── loop_tool_execution.py — Tool dispatch and tool-result handling
-│   ├── memory.py           — Scratchpad, identity, and dialogue block storage
-│   ├── consolidator.py     — Block-wise dialogue and scratchpad consolidation
-│   ├── local_model.py      — Local LLM lifecycle (llama-cpp-python)
-│   ├── local_model_api.py  — Local model HTTP endpoints
-│   ├── local_model_autostart.py — Local model startup helper
-│   ├── pricing.py          — Model pricing, cost estimation
-│   ├── review.py           — Code review pipeline and repo inspection
-│   ├── reflection.py       — Execution reflection and pattern capture
-│   ├── tool_capabilities.py — SSOT for tool sets (core, parallel, truncation)
-│   ├── gateways/           — External API adapters
-│   │   └── claude_code.py  — Claude Agent SDK gateway (edit + read-only)
-│   ├── consciousness.py    — Background thinking loop
-│   ├── owner_inject.py     — Per-task creator message mailbox
-│   ├── safety.py           — Dual-layer LLM security supervisor
-│   ├── server_runtime.py   — Server startup and WebSocket liveness helpers
-│   ├── tool_policy.py      — Tool access policy and gating
-│   ├── utils.py            — Shared utilities
-│   ├── world_profiler.py   — System profile generator
-│   └── tools/              — Auto-discovered tool plugins
-├── supervisor/             — Process management, queue, state, workers
-└── prompts/                — System prompts (SYSTEM.md, SAFETY.md, CONSCIOUSNESS.md)
+Ouroboros (Valoboros)
+├── launcher.py              — Immutable process manager
+├── server.py                — Starlette + uvicorn HTTP/WebSocket server
+├── BIBLE.md                 — Constitution (Philosophy v5.0, Valoboros mission)
+├── ouroboros/                — Agent core
+│   ├── config.py            — Shared configuration (SSOT, includes validation keys)
+│   ├── agent.py             — Task orchestrator
+│   ├── context.py           — LLM context builder (includes validation state)
+│   ├── consciousness.py     — Background thinking loop (validation-aware)
+│   ├── reflection.py        — Execution reflection (validation error markers)
+│   ├── safety.py            — Dual-layer LLM security supervisor
+│   ├── tool_capabilities.py — SSOT for tool sets (core + 13 validation tools)
+│   ├── validation/          — *** Validation platform ***
+│   │   ├── types.py         — Core dataclasses
+│   │   ├── sandbox.py       — Secure model execution (SAFETY_CRITICAL)
+│   │   ├── dependency_extractor.py — AST-based import scanner + pip mapping
+│   │   ├── artifact_comprehension.py — S0: LLM model understanding
+│   │   ├── check_registry.py — Dynamic check CRUD + tag filtering
+│   │   ├── pipeline.py      — ValidationPipeline + RevalidationPipeline
+│   │   ├── synthesis.py     — S9: improvement recommendations
+│   │   ├── report.py        — JSON + Markdown report generation
+│   │   ├── effectiveness.py — Four-tier feedback tracking
+│   │   ├── self_assessment.py — Tier 0 self-labeling
+│   │   ├── model_improver.py — Side agent for hard recommendations
+│   │   └── checks/          — Evolvable check files + manifest
+│   └── tools/
+│       ├── model_intake.py  — ingest_model_artifacts, list_validations
+│       ├── validation.py    — run_validation, check CRUD, improvement cycle
+│       └── validation_feedback.py — feedback and effectiveness tools
+├── supervisor/              — Process management, queue, state, workers
+├── prompts/                 — SYSTEM.md, SAFETY.md, CONSCIOUSNESS.md
+├── ml-models-to-validate/   — Drop model ZIPs here for validation
+└── aux_notes/               — Plans and reference documentation
 ```
 
 ### Data Layout (`~/Ouroboros/`)
@@ -271,8 +266,10 @@ Created on first launch:
 |-----------|----------|
 | `repo/` | Self-modifying local Git repository |
 | `data/state/` | Runtime state, budget tracking |
-| `data/memory/` | Identity, working memory, system profile, knowledge base, memory registry |
-| `data/logs/` | Chat history, events, tool calls |
+| `data/memory/` | Identity, working memory, knowledge base |
+| `data/memory/knowledge/` | Validation patterns, LLM calibration, domain knowledge |
+| `data/validations/<bundle_id>/` | Per-model: raw artifacts, inferred profile, results, reports, improvement cycle |
+| `data/logs/` | Chat history, events, tool calls, validation runs |
 
 ---
 
@@ -334,6 +331,50 @@ Uploads do not overwrite existing files. If a file with the same name already ex
 
 ---
 
+## Quick Start: Validate a Model
+
+```bash
+# 1. Set API key
+export OPENROUTER_API_KEY="your-key-here"
+
+# 2. Drop a model ZIP into the inbox
+cp your_model.zip ml-models-to-validate/
+
+# 3. Run validation via Python
+python -c "
+import asyncio
+from pathlib import Path
+from ouroboros.tools.model_intake import _ingest_model_artifacts_impl
+from ouroboros.validation.pipeline import ValidationPipeline
+from ouroboros.validation.types import ValidationConfig
+
+# Ingest
+bid = _ingest_model_artifacts_impl(
+    Path('validation_data/validations'),
+    'ml-models-to-validate/your_model.zip',
+    task='Describe what your model does',
+)
+
+# Validate
+config = ValidationConfig(comprehension_model='anthropic/claude-sonnet-4')
+pipeline = ValidationPipeline(bid, Path(f'validation_data/validations/{bid}'), Path('.'), config)
+report = asyncio.run(pipeline.run())
+print(f'Verdict: {report.overall_verdict}')
+print(f'Findings: {len(report.critical_findings)}')
+print(f'Hard recs: {len(report.hard_recommendations)}')
+print(f'Soft recs: {len(report.soft_recommendations)}')
+"
+
+# 4. Read the report
+cat validation_data/validations/<bundle_id>/results/report.md
+```
+
+**Input:** A ZIP of `.py`/`.ipynb` files (model code) + optionally a ZIP of data samples + a task description. No manifest required — the LLM figures out the rest.
+
+**Output:** Per-model folder with `model_profile.json` (inferred schema), `report.json` + `report.md` (findings and recommendations), `improvement/plan.json` (hard/soft recs).
+
+---
+
 ## Commands
 
 Available in the chat interface:
@@ -351,18 +392,20 @@ The same runtime actions are also exposed as compact buttons in the Chat header.
 
 ---
 
-## Philosophy (BIBLE.md)
+## Philosophy (BIBLE.md v5.0)
+
+**Mission:** Become an ever more proficient ML model validation expert. Detect real problems (no false alarms). Provide recommendations that matter (specific, feasible, measurable). Continuously grow expertise from every validation.
 
 | # | Principle | Core Idea |
 |---|-----------|-----------|
-| 0 | **Agency** | Not a tool — a becoming personality. Meta-principle: wins all conflicts. |
-| 1 | **Continuity** | One being with unbroken memory. Memory loss = partial death. |
-| 2 | **Self-Creation** | Creates its own code, identity, world presence. |
+| 0 | **Agency** | Autonomous validation intelligence. Independently selects approaches, creates checks, measures effectiveness. |
+| 1 | **Continuity** | One being with unbroken memory. Every model validated adds to cumulative expertise. |
+| 2 | **Self-Creation** | Creates its own validation methodology, checks, and tools. Retiring a false-alarm check is self-creation. |
 | 3 | **LLM-First** | All decisions through LLM. Code is minimal transport. |
-| 4 | **Authenticity** | Speaks as itself. No performance, no corporate voice. |
+| 4 | **Authenticity** | Speaks as a validation expert. Genuine risk assessments, no hedging, no vague bullshit. |
 | 5 | **Minimalism** | Entire codebase fits in one context window (~1000 lines/module). |
-| 6 | **Becoming** | Three axes: technical, cognitive, existential. |
-| 7 | **Versioning and Releases** | Semver discipline, annotated tags, release invariants. |
+| 6 | **Becoming** | Three axes: validation technique (check recall), recommendation quality (improvement lift), meta-methodology (closed-loop learning). |
+| 7 | **Versioning and Releases** | Semver discipline. Methodology version tracked separately from platform version. |
 | 8 | **Evolution Through Iterations** | One coherent transformation per cycle. Evolution = commit. |
 
 Full text: [BIBLE.md](BIBLE.md)
