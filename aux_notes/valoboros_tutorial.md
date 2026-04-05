@@ -305,9 +305,13 @@ print(f"Verdict: {report.overall_verdict}")
 
 ---
 
-## Part 3: The Learning Loop
+## Part 3: After Validation — Human Feedback
 
-Valoboros learns from every validation it performs.
+After a pipeline run, you can review the report and provide feedback.
+This feedback feeds the effectiveness tracker, which over time informs
+the methodology evolution. **This is the only learning-related activity
+that happens in pipeline mode** — everything else (arxiv, reflection,
+evolution) happens between validations in full agent mode.
 
 ### Check effectiveness metrics
 
@@ -348,9 +352,52 @@ tracker.record_finding_feedback(
 )
 ```
 
-### Run the reflection engine
+This feedback is stored in the effectiveness tracker (JSONL files). When
+Valoboros runs in full agent mode, the methodology evolver uses this data
+to decide which checks to fix, create, or delete.
 
-After validating several models, reflect on patterns:
+---
+
+## Part 3b: Between Validations — The Learning Cycle (Full Agent Mode Only)
+
+**Important:** The activities in this section do NOT happen during `pipeline.run()`.
+They run **between** validations, either:
+- Manually (you call them from a script, as shown below)
+- Automatically (when Ouroboros runs as a full agent with the consciousness loop)
+
+The learning cycle follows the Ouroboros pattern: **act → reflect → improve → act
+better next time.** The pipeline is the "act" step. Everything below is "reflect"
+and "improve."
+
+```
+Validate model A (pipeline)
+    ↓
+[Between validations — learning cycle]
+    ├── Reflection engine: analyze past validation results
+    ├── Literature scanner: search arxiv for new techniques
+    ├── Methodology evolver: create/fix/delete checks based on evidence
+    └── Knowledge base updated with new patterns
+    ↓
+Validate model B (pipeline, now using improved methodology)
+```
+
+### When does this run automatically?
+
+In **full agent mode** (`python server.py` → web UI → `/bg start`), the
+background consciousness loop wakes up every ~5 minutes and checks:
+
+1. **Priority 1:** New model ZIP in inbox? → Ingest and validate it
+2. **Priority 2:** Stuck validation? → Resume it
+3. **Priority 3:** Enough new feedback since last reflection? → Run reflection
+4. **Priority 4:** Every 3rd idle wakeup → Scan arxiv
+5. **Priority 5:** Evolution targets available? → Evolve methodology
+6. **Priority 6:** Nothing to do → Groom knowledge base
+
+In **pipeline mode**, none of this happens automatically. You call it manually:
+
+### Reflection engine (analyze past validations)
+
+Needs >= 2 completed validations to find patterns:
 
 ```python
 from ouroboros.validation.reflection_engine import ValidationReflectionEngine
@@ -368,7 +415,13 @@ print(f"Hot checks: {result.hot_checks}")
 print(f"Knowledge written: {result.knowledge_entries_written}")
 ```
 
-### Scan arxiv for new techniques
+The reflection engine writes to the knowledge base (e.g., `validation_patterns.md`,
+`model_type_classification.md`). When the **next** model is validated, the
+methodology planner reads these files and uses them to select better checks.
+
+### Literature scanner (search arxiv)
+
+Searches for recent papers on ML model validation topics:
 
 ```python
 from ouroboros.validation.literature_scanner import LiteratureScanner
@@ -384,7 +437,16 @@ for p in papers:
         print(f"  [{p.relevance_score:.1f}] {p.title}")
 ```
 
-### Evolve the methodology
+Findings are written to `knowledge/arxiv_recent.md`. The 7 search queries
+rotate across calls. No LLM is used — relevance is scored by keyword matching.
+
+**This does NOT help the current model.** It accumulates knowledge for future
+validations. The next time a model is validated, the methodology planner may
+reference these findings when designing the validation plan.
+
+### Methodology evolver (create/fix/delete checks)
+
+Uses effectiveness data + knowledge base to improve checks:
 
 ```python
 from ouroboros.validation.methodology_evolver import MethodologyEvolver
@@ -403,6 +465,26 @@ if action:
 else:
     print("No evolution targets available yet.")
 ```
+
+The evolver picks ONE action per call: fix a check with low precision, disable
+a dead check, or propose a new check. Changes are made to files in
+`ouroboros/validation/checks/` and registered in `check_manifest.json`.
+
+### How the learning cycle improves future validations
+
+```
+Model A validated → S8.CODE_SMELLS triggers (false positive) → human marks as FP
+                                    ↓
+            Effectiveness tracker records: S8.CODE_SMELLS precision = 0.2
+                                    ↓
+            [Between validations] Evolver sees low precision → rewrites the check
+                                    ↓
+Model B validated → improved S8.CODE_SMELLS runs → fewer false positives
+```
+
+The key insight: **learning is asynchronous.** The pipeline validates with whatever
+methodology exists at that moment. Improvements happen between validations and
+benefit the next model, not the current one.
 
 ---
 
