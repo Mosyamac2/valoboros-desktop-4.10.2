@@ -868,52 +868,138 @@ automatically on completion or via `kill_all_tracked_subprocesses()` on panic.
 
 ---
 
-## Validation Pipeline
+## Validation Platform (Valoboros)
 
-Ouroboros-V includes a self-improving ML model validation platform. Key components:
+Ouroboros (Valoboros) includes a self-improving ML model validation platform
+with 28 Python modules, 9 seed checks, 22 LLM-callable tools, 4 API endpoints,
+and a dedicated web UI tab.
 
-### Modules (`ouroboros/validation/`)
+### Core Modules (`ouroboros/validation/`)
 
 | Module | Purpose |
 |--------|---------|
-| `types.py` | Core dataclasses: CheckResult, ValidationReport, ModelProfile, etc. |
-| `sandbox.py` | Secure model execution (resource limits, network isolation). **Safety-critical.** |
-| `check_registry.py` | Dynamic check CRUD, tag-based filtering, manifest persistence |
-| `artifact_comprehension.py` | S0: LLM-powered analysis of raw model artifacts → ModelProfile |
-| `_stage_runner.py` | Shared orchestrator logic for check-based stages |
-| `intake_check.py` .. `code_quality.py` | Stage orchestrators S0-S8 |
-| `synthesis.py` | S9: generates hard/soft improvement recommendations |
-| `report.py` | JSON + Markdown report generation |
-| `pipeline.py` | ValidationPipeline (S0-S9) and RevalidationPipeline |
-| `effectiveness.py` | Tracks finding quality and recommendation quality independently |
-| `self_assessment.py` | Tier 0: LLM self-rates its own findings |
-| `model_improver.py` | Side agent: implements hard recommendations in sandbox |
-| `config_loader.py` | Maps OUROBOROS_VALIDATION_* settings to ValidationConfig |
+| `types.py` | Core dataclasses: CheckResult, ValidationReport, ModelProfile, MethodologyPlan, RevalidationResult, ImproverResult, ModelResearchResult, PaperSummary, EvolutionAction, ReflectionResult, SandboxResult, ValidationConfig |
+| `sandbox.py` | Secure model execution: RLIMIT_AS/RLIMIT_CPU, unshare --net, stdout truncation. **Safety-critical (read-only in Docker).** |
+| `config_loader.py` | Maps 25 `OUROBOROS_VALIDATION_*` settings to ValidationConfig |
+
+### Pipeline (`ouroboros/validation/`)
+
+| Module | Purpose |
+|--------|---------|
+| `pipeline.py` | `ValidationPipeline` (S0-S9 with hard gates, methodology-filtered stages, execution logging) and `RevalidationPipeline` (re-runs S2-S7 on improved code) |
+| `artifact_comprehension.py` | S0: LLM-powered model understanding. Calls `DependencyExtractor` first (deterministic), then LLM, merges results |
+| `dependency_extractor.py` | AST-based import scanner for .py/.ipynb files. Maps import→pip names. Parses requirements.txt and %pip magic |
+| `model_researcher.py` | Per-model targeted arxiv research. Dynamic queries from model profile, model-specific relevance scoring, LLM synthesis |
+| `methodology_planner.py` | Per-model validation plan: qualitative + quantitative blocks, check selection/skip/create, risk priorities. LLM-based with deterministic fallback |
+| `_stage_runner.py` | Shared orchestrator: queries CheckRegistry, runs checks with error catching |
+| `intake_check.py` | S0 orchestrator |
+| `reproducibility.py` | S1: runs code twice in sandbox, checks determinism |
+| `performance.py` | S2 orchestrator |
+| `fit_quality.py` | S3 orchestrator |
+| `leakage.py` | S4 orchestrator |
+| `fairness.py` | S5 orchestrator |
+| `sensitivity.py` | S6 orchestrator |
+| `robustness.py` | S7 orchestrator |
+| `code_quality.py` | S8 orchestrator |
+| `synthesis.py` | S9: collects failed checks, generates hard/soft recommendations via LLM |
+| `report.py` | JSON + Markdown report with qualitative/quantitative sections, LLM executive summary |
+| `check_registry.py` | Dynamic check CRUD, tag-based model filtering, check_manifest.json |
+
+### Learning & Evolution (`ouroboros/validation/`)
+
+| Module | Purpose |
+|--------|---------|
+| `effectiveness.py` | Four-tier feedback tracker (Tier 0 self-assessed → Tier 2 human). Finding quality and recommendation quality tracked independently. Graduated maturity phases. |
+| `self_assessment.py` | Tier 0: LLM rates its own findings as likely-TP/likely-FP after each validation |
+| `model_improver.py` | Side agent: implements hard recommendations by LLM code modification in sandbox |
+| `reflection_engine.py` | Cross-validation pattern analysis: common failures, dead/hot checks, writes to knowledge base |
+| `literature_scanner.py` | Background arxiv scanning: 7 rotating queries, keyword heuristic, scan history |
+| `methodology_evolver.py` | Autonomous check creation/fix/deletion based on effectiveness data |
+| `watcher.py` | Folder watcher: scans inbox for new .zip files, tracks processed state, auto-ingests |
+
+### Seed Checks (`ouroboros/validation/checks/`)
+
+9 checks registered in `check_manifest.json`. Each exports `run(bundle_dir, model_profile, sandbox) -> CheckResult`.
+
+| Check | Stage | Type | What it detects |
+|-------|-------|------|-----------------|
+| `s0_code_parseable.py` | S0 | deterministic | Syntax errors in .py, broken .ipynb |
+| `s0_data_loadable.py` | S0 | deterministic | Data files pandas can't load |
+| `s2_oos_metrics.py` | S2 | sandbox | OOS accuracy/AUC/RMSE |
+| `s3_train_test_gap.py` | S3 | sandbox | Overfitting (gap > 0.10) |
+| `s4_target_leakage.py` | S4 | deterministic | Feature-target correlation > 0.95 |
+| `s5_disparate_impact.py` | S5 | deterministic | Disparate impact ratio outside 0.8-1.25 |
+| `s6_feature_importance.py` | S6 | sandbox | Negative permutation importance |
+| `s7_perturbation.py` | S7 | sandbox | > 20% prediction change from +1 std |
+| `s8_code_smells.py` | S8 | deterministic | Hardcoded paths, missing seeds, no split |
 
 ### Tools (`ouroboros/tools/`)
 
-| Module | Tools |
+| Module | Tools (22 total) |
 |--------|-------|
-| `model_intake.py` | ingest_model_artifacts, list_validations, get_validation_status |
-| `validation.py` | run_validation, run_validation_stage, get_validation_report, get_model_profile, list/create/edit/disable/delete_validation_check, run_improvement_cycle, compare_validations, backtest_check |
-| `validation_feedback.py` | submit_finding_feedback, run_self_assessment, get_finding_effectiveness, get_recommendation_effectiveness, get_platform_metrics, get_evolution_targets, get_methodology_changelog |
+| `model_intake.py` | `ingest_model_artifacts`, `list_validations`, `get_validation_status` |
+| `validation.py` | `run_validation`, `run_validation_stage`, `get_validation_report`, `get_model_profile`, `list_validation_checks`, `create_validation_check`, `edit_validation_check`, `disable_validation_check`, `delete_validation_check`, `run_improvement_cycle`, `compare_validations`, `backtest_check` |
+| `validation_feedback.py` | `submit_finding_feedback`, `run_self_assessment`, `get_finding_effectiveness`, `get_recommendation_effectiveness`, `get_platform_metrics`, `get_evolution_targets`, `get_methodology_changelog` |
 
-### Checks (`ouroboros/validation/checks/`)
+### Web UI (`web/modules/validation.js`)
 
-Individual `.py` files registered in `check_manifest.json`. Each exports `run(bundle_dir, model_profile, sandbox) -> CheckResult`. The agent can create, edit, disable, and delete checks as part of methodology evolution.
+Dedicated Validation tab: drag-drop ZIP upload, task description, validation list with status badges, inline report viewer. Calls `/api/validation/*` endpoints.
 
-### Data (`~/Ouroboros/data/validations/`)
+### API Endpoints (`ouroboros/server_validation_api.py`)
 
-Per-bundle: `raw/` (model code + data samples), `inputs/` (task + description), `inferred/` (model_profile.json), `results/` (stage results + report), `improvement/` (plan + implementation + revalidation).
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/validation/upload` | POST | Upload model ZIP + task, auto-ingest, return bundle_id |
+| `/api/validation/list` | GET | List bundles with status/verdict |
+| `/api/validation/run` | POST | Trigger validation pipeline for a bundle |
+| `/api/validation/report` | GET | Get report as JSON or Markdown |
 
 ### Pipeline Flow
 
 ```
-Ingest → S0 Comprehension (HARD GATE) → S1 Reproducibility (HARD GATE for S2-S7)
-  → S2-S8 checks → S9 Synthesis → Report → Self-Assessment (Tier 0)
-  → [Optional] Improvement Cycle: ModelImprover → Revalidation → Effectiveness Recording
+Ingest (ZIP upload or watcher) →
+  S0 Comprehension (HARD GATE) →
+    Dependency extraction (AST) + LLM profile inference →
+  Dependency installation (sandbox venv) →
+  Per-model arxiv research (targeted queries from profile) →
+  Methodology planning (qualitative + quantitative blocks) →
+  S1 Reproducibility (HARD GATE for S2-S7) →
+  S2-S8 checks (filtered by methodology plan) →
+  S9 Synthesis (hard/soft recommendations) →
+  Report generation (JSON + MD with qual/quant sections) →
+  Self-assessment (Tier 0) →
+  [Optional] Improvement cycle → Revalidation → Effectiveness recording
+```
+
+### Data Layout (`~/Ouroboros/data/`)
+
+```
+validations/<bundle_id>/
+  raw/model_code/              # extracted from ZIP
+  raw/data_samples/            # optional data ZIP
+  inputs/task.txt              # task description
+  inferred/model_profile.json  # LLM-inferred schema
+  inferred/dependency_report.json  # AST-extracted deps
+  methodology/research.md     # per-model arxiv findings
+  methodology/methodology.md  # validation plan
+  methodology/methodology_plan.json
+  methodology/custom_checks/  # checks created for this model
+  results/stage_S{N}.json     # per-stage results
+  results/report.json          # structured report
+  results/report.md            # human-readable report
+  improvement/plan.json        # hard + soft recommendations
+  improvement/implementation/  # modified model code
+  improvement/revalidation/    # revalidation results
+  validation.log               # timestamped execution trace
+  .sandbox_venv/               # isolated Python environment
+ml-models-to-validate/         # inbox (resolved relative to DATA_DIR)
+  .valoboros_processed.json    # processed tracking
 ```
 
 ### Feedback & Evolution
 
-Four-tier feedback: Tier 0 (LLM self-assessment, weight 0.3), Tier 1 (improvement lift), Tier 2 (human, weight 1.0), Tier 3 (LLM cross-check, weight 0.5). Finding quality and recommendation quality tracked independently. Graduated evolution gates: early phase (< 20 bundles) = low bar, mature phase = metric improvement required.
+Four-tier feedback: Tier 0 (LLM self-assessment, weight 0.3), Tier 1 (improvement lift), Tier 2 (human, weight 1.0), Tier 3 (LLM cross-check, weight 0.5). Finding quality and recommendation quality tracked as independent dimensions. Graduated evolution gates: early phase (< 20 bundles with feedback) = low bar, mature phase = metric improvement required. Two literature scanning mechanisms: background (static queries, between validations) and per-model (dynamic queries from profile, during pipeline).
+
+### Docker Security
+
+In Docker deployment, 5 safety-critical files are bind-mounted as read-only: `BIBLE.md`, `ouroboros/safety.py`, `ouroboros/tools/registry.py`, `prompts/SAFETY.md`, `ouroboros/validation/sandbox.py`. Container runs as non-root user with `cap_drop: ALL` + `cap_add: SYS_ADMIN`. Resource limits: 6GB RAM, 4 CPU.

@@ -1,7 +1,8 @@
-# CLAUDE.md — Ouroboros → VALOBOROS Adaptation Project
+# CLAUDE.md — Ouroboros (Valoboros) — Self-Evolving ML Model Validation Platform
 
-**Upstream:** [joi-lab/ouroboros-desktop](https://github.com/joi-lab/ouroboros-desktop) — codebase version 4.11.8 (last tagged release: v3.3.1)
-**Goal:** Repurpose Ouroboros into a **self-improving ML-model validation platform** (codename VALOBOROS) that autonomously develops and refines validation methodologies.
+**Upstream:** [joi-lab/ouroboros-desktop](https://github.com/joi-lab/ouroboros-desktop) — base codebase v4.10.2
+**Status:** Valoboros validation platform **fully implemented** — 28 validation modules, 22 tools, 9 seed checks, 4 API endpoints, web UI tab, Docker deployment, 139+ validation-specific tests.
+**Constitution:** BIBLE.md v5.0 — Mission: detect real problems, provide feasible recommendations, continuously grow as a validation expert.
 
 ---
 
@@ -120,6 +121,35 @@ ouroboros-desktop/
 │   │   ├── __init__.py
 │   │   └── claude_code.py       # Claude Agent SDK wrapper with PreToolUse safety hooks (13K)
 │   │
+│   ├── validation/              # *** Valoboros validation platform (28 modules) ***
+│   │   ├── types.py             # 14 dataclasses (CheckResult, ValidationReport, ModelProfile, etc.)
+│   │   ├── sandbox.py           # Secure execution (RLIMIT, unshare, SAFETY_CRITICAL) (🔒🔄)
+│   │   ├── config_loader.py     # Maps 25 OUROBOROS_VALIDATION_* settings to ValidationConfig
+│   │   ├── pipeline.py          # ValidationPipeline (S0-S9) + RevalidationPipeline
+│   │   ├── artifact_comprehension.py  # S0: LLM model understanding + dep extraction
+│   │   ├── dependency_extractor.py    # AST import scanner + pip name mapping
+│   │   ├── model_researcher.py  # Per-model targeted arxiv research
+│   │   ├── methodology_planner.py     # Per-model qual/quant validation plan
+│   │   ├── check_registry.py    # Dynamic check CRUD + tag filtering
+│   │   ├── _stage_runner.py     # Shared stage orchestrator logic
+│   │   ├── intake_check.py .. code_quality.py  # Stage orchestrators S0-S8
+│   │   ├── synthesis.py         # S9: hard/soft improvement recommendations
+│   │   ├── report.py            # JSON + Markdown report (qual/quant sections)
+│   │   ├── effectiveness.py     # Four-tier feedback tracker
+│   │   ├── self_assessment.py   # Tier 0 LLM self-rating
+│   │   ├── model_improver.py    # Side agent: implements hard recs in sandbox
+│   │   ├── reflection_engine.py # Cross-validation pattern analysis
+│   │   ├── literature_scanner.py # Background arxiv scanning (7 queries)
+│   │   ├── methodology_evolver.py # Autonomous check evolution
+│   │   ├── watcher.py           # Folder watcher for auto-ingestion
+│   │   └── checks/              # 9 seed checks + agent-created checks
+│   │       ├── check_manifest.json
+│   │       ├── s0_code_parseable.py, s0_data_loadable.py
+│   │       ├── s2_oos_metrics.py, s3_train_test_gap.py
+│   │       ├── s4_target_leakage.py, s5_disparate_impact.py
+│   │       ├── s6_feature_importance.py, s7_perturbation.py
+│   │       └── s8_code_smells.py
+│   │
 │   └── tools/                   # Auto-discovered plugins (each exports get_tools() → List[ToolEntry])
 │       ├── __init__.py
 │       ├── registry.py          # Sandbox, ToolContext, ToolRegistry, SAFETY_CRITICAL_PATHS (🔒🔄) (16K)
@@ -140,7 +170,10 @@ ouroboros-desktop/
 │       ├── evolution_stats.py   # generate_evolution_stats (8.5K)
 │       ├── health.py            # codebase_health (4K)
 │       ├── compact_context.py   # compact_context tool (3K)
-│       └── tool_discovery.py    # list_available_tools, enable_tools (meta) (4K)
+│       ├── tool_discovery.py    # list_available_tools, enable_tools (meta) (4K)
+│       ├── model_intake.py      # Valoboros: ingest_model_artifacts, list_validations (3 tools)
+│       ├── validation.py        # Valoboros: run_validation, check CRUD, etc. (12 tools)
+│       └── validation_feedback.py # Valoboros: feedback, effectiveness, evolution (7 tools)
 │
 ├── supervisor/                  # Process management — ~157K total
 │   ├── __init__.py
@@ -152,16 +185,15 @@ ouroboros-desktop/
 │   └── workers.py               # Worker lifecycle management (28K)
 │
 ├── web/                         # SPA frontend (HTML/JS/CSS)
-│   ├── index.html               # Main page shell
+│   ├── index.html               # Main page shell (8 nav tabs incl. Validation)
 │   ├── app.js                   # App entry point
-│   ├── style.css                # Main stylesheet (43K) — glassmorphism design system
+│   ├── style.css                # Main stylesheet — glassmorphism + validation tab styles
 │   ├── settings.css / onboarding.css
 │   ├── chart.umd.min.js         # Chart.js (bundled)
-│   ├── modules/                 # JS modules: chat (49K), settings_ui (26K),
-│   │                            # onboarding_wizard (51K), evolution, files,
-│   │                            # logs, log_events, costs, about, ws, utils,
-│   │                            # settings_catalog, settings_controls, settings_local_model
-│   └── providers/               # Provider logo assets (openrouter, openai, anthropic, cloudru)
+│   ├── modules/                 # JS modules: chat, settings_ui, onboarding_wizard,
+│   │                            # evolution, files, validation (Valoboros upload/list/report),
+│   │                            # logs, log_events, costs, about, ws, utils
+│   └── providers/               # Provider logo assets
 │
 ├── webview/                     # PyWebView JS bridge (desktop-only)
 │   └── js/                      # api.js, customize.js, finish.js, lib/
@@ -169,13 +201,30 @@ ouroboros-desktop/
 ├── scripts/
 │   └── download_python_standalone.sh
 │
-├── tests/                       # 69 test files, pytest
-│   ├── test_smoke.py            # Core smoke tests (20K)
-│   ├── test_constitution.py     # BIBLE.md compliance tests (10K)
-│   ├── test_commit_gate.py      # Pre-commit review gate (29K)
-│   ├── test_scope_review.py     # Scope review (35K)
-│   ├── test_phase7_pipeline.py  # Full pipeline tests (33K)
-│   └── ... (64 more test files)
+├── tests/                       # 87 test files, pytest (139 validation-specific tests)
+│   ├── test_smoke.py            # Core smoke tests (includes 22 validation tools)
+│   ├── test_validation_types.py .. test_validation_api.py  # 19 Valoboros test files
+│   └── ... (68 original Ouroboros test files)
+│
+├── Dockerfile                   # Multi-stage build, non-root user, healthcheck
+├── docker-compose.yml           # Volumes, ro safety mounts, resource limits, SYS_ADMIN
+├── .env.example                 # API key template
+├── .dockerignore
+│
+├── aux_notes/                   # Plans, prompts, tutorial, references
+│   ├── valoboros_tutorial.md    # Step-by-step usage guide
+│   ├── ouroboros_validation_platform_plan.md  # Master validation plan (v0.3)
+│   ├── valoboros_agency_plan.md # Daemon, methodology planner, learner
+│   ├── per_model_research_plan.md # Two-mechanism arxiv research
+│   ├── docker_deployment_plan.md  # Docker security architecture
+│   ├── web_upload_plan.md       # Web UI upload + API design
+│   ├── post_first_validation_improvements.md  # Lessons from first real validation
+│   ├── implementation_prompts.md  # 12 prompts for core platform
+│   ├── agency_implementation_prompts.md  # 5 prompts for agency layer
+│   ├── per_model_research_prompts.md  # 3 prompts for targeted research
+│   ├── docker_implementation_prompts.md  # 2 prompts for Docker
+│   ├── web_upload_prompts.md    # 4 prompts for web upload
+│   └── справка_1/2/3.md        # Original Russian reference docs
 │
 └── assets/                      # Icons (icns/ico/png), logo, screenshots
 ```
@@ -204,7 +253,20 @@ Created on first launch. This is where the agent lives and accumulates experienc
 │   │   └── knowledge/
 │   │       ├── index-full.md    # Auto-index of all topics (📖 auto-updated)
 │   │       ├── patterns.md      # Error patterns + root causes (✏️)
+│   │       ├── validation_patterns.md  # Cross-model patterns (✏️ reflection engine)
+│   │       ├── model_type_{type}.md    # Per-type knowledge (✏️ researcher/reflection)
+│   │       ├── arxiv_recent.md  # Background scanner findings (✏️)
 │   │       └── {topic}.md       # Individual knowledge topics (✏️)
+│   ├── validations/{bundle_id}/ # Valoboros validation bundles
+│   │   ├── raw/model_code/      # Extracted from ZIP
+│   │   ├── inferred/model_profile.json
+│   │   ├── methodology/         # research.md, methodology.md, custom_checks/
+│   │   ├── results/             # stage_S{N}.json, report.json, report.md
+│   │   ├── improvement/         # plan.json, implementation/, revalidation/
+│   │   └── validation.log       # Timestamped execution trace
+│   ├── ml-models-to-validate/   # Inbox (resolved relative to DATA_DIR)
+│   ├── validation_findings.jsonl    # Effectiveness: finding quality
+│   ├── validation_recommendations.jsonl  # Effectiveness: rec quality
 │   └── logs/
 │       ├── chat.jsonl           # Dialogs and responses
 │       ├── progress.jsonl       # "Thinking aloud" progress messages
@@ -277,69 +339,69 @@ These are the unique self-improvement infrastructure. Removing any one degrades 
 
 ---
 
-## VALOBOROS Domain: ML-Model Validation
+## VALOBOROS: Current Implementation Status
 
-### What the agent validates
+All adaptation levels are **COMPLETE**. The validation platform is fully implemented.
 
-Each incoming model is a bundle:
+### What exists now (28 validation modules, 22 tools, 9 seed checks, 19 test files)
 
-- **ZIP archive** with model source code and dependencies
-- **Model report** — task description, intended use, known limitations, training details
-- **Sample data** — training/test splits, example inputs/outputs
+| Layer | Modules | Status |
+|-------|---------|--------|
+| **Types & Config** | `types.py` (14 dataclasses), `config_loader.py`, 25 config keys in `config.py` | Done |
+| **Sandbox** | `sandbox.py` — RLIMIT_AS/CPU, unshare --net, 1MB output cap, notebook support | Done |
+| **Check System** | `check_registry.py` (CRUD + tag filtering), 9 seed checks in `checks/` | Done |
+| **Pipeline** | `pipeline.py` (S0-S9 with hard gates, methodology filtering, execution logging) | Done |
+| **Comprehension** | `artifact_comprehension.py` (LLM), `dependency_extractor.py` (AST) | Done |
+| **Research** | `model_researcher.py` (per-model arxiv), `literature_scanner.py` (background) | Done |
+| **Methodology** | `methodology_planner.py` (qualitative + quantitative blocks, LLM + fallback) | Done |
+| **Stage Orchestrators** | `intake_check.py` .. `code_quality.py`, `_stage_runner.py` (10 modules) | Done |
+| **Synthesis & Report** | `synthesis.py` (hard/soft recs), `report.py` (JSON + MD with qual/quant) | Done |
+| **Feedback** | `effectiveness.py` (4-tier), `self_assessment.py` (Tier 0) | Done |
+| **Improvement** | `model_improver.py` (side agent), `RevalidationPipeline` | Done |
+| **Agency** | `watcher.py` (folder scan), `reflection_engine.py`, `methodology_evolver.py` | Done |
+| **Tools** | `model_intake.py` (3), `validation.py` (12), `validation_feedback.py` (7) | Done |
+| **Web UI** | `validation.js` tab, `/api/validation/*` endpoints (4), CSS styles | Done |
+| **Docker** | `Dockerfile`, `docker-compose.yml`, ro safety mounts, resource limits | Done |
+| **Prompts** | SYSTEM.md, BIBLE.md v5.0, CONSCIOUSNESS.md — all validation-adapted | Done |
 
-### Validation checks the agent must learn to perform
+### Validation pipeline flow
 
-Out-of-sample/out-of-time performance, overfitting/underfitting detection, data leakage identification, bias/fairness assessment, feature sensitivity analysis (counterintuitive behavior), reproducibility verification, documentation completeness audit.
+```
+ZIP upload (web UI or watcher) → ingest →
+  S0 comprehension (AST deps + LLM profile) →
+  dependency installation (sandbox venv) →
+  per-model arxiv research (targeted queries) →
+  methodology planning (qual + quant blocks) →
+  S1 reproducibility (HARD GATE) →
+  S2-S8 checks (filtered by plan) →
+  S9 synthesis (hard/soft recs, no speculation) →
+  report (JSON + MD) →
+  self-assessment (Tier 0) →
+  [optional] improvement cycle → revalidation
+```
 
-### How self-improvement applies
+### Validation two-block structure
 
-Through its evolution loop the agent: discovers new failure patterns across models → records in `knowledge/patterns.md`; develops new validation methodologies → stores as knowledge topics; refines its own validation code → commits through the 7-step protocol; accumulates domain expertise in `identity.md` and the knowledge base; reflects on validation failures → improves via `task_reflections.jsonl`.
+Every model validation has:
+1. **Qualitative analysis** (S0, S1, S4, S8) — architecture, target formulation, data pipeline, code quality
+2. **Quantitative analysis** (S2, S3, S5, S6, S7) — metrics, sensitivity, stability, drill-downs
 
----
+### Key files already adapted
 
-## Adaptation Roadmap
-
-Derived from Reference 3. Three levels, ordered by dependency.
-
-### Level 1 — Redefine identity and goals
-
-| File | What to change | Risk |
-|------|----------------|------|
-| `prompts/SYSTEM.md` (✏️) | Replace "I Am Ouroboros" self-identification → VALOBOROS validation role. Adapt 4 self-diagnostic questions to validation context. Add `## Business Context` section with domain vocabulary, KPIs, stakeholders. **Keep**: 7-step evolution protocol (lines ~599–621), all memory protocols, drift detector, tool result processing protocol | High — operational brain |
-| `BIBLE.md` (🔒) | Adapt principle descriptions: P0 Agency → autonomous validation agent, P2 Self-Creation → creates/improves validation tools, P4 Authenticity → competent within validation domain, P6 Becoming → axes: technical/operational/strategic. Keep P1, P3, P5, P7, P8 unchanged. Add Business Hard Limits to Constraints. **Requires editing source + rebuild** | High — constitutional |
-| `ouroboros/memory.py` (✏️) | Edit `_default_identity()` seed text → "I am VALOBOROS, a self-evolving ML-model validation agent..." | Medium |
-
-### Level 2 — Configure operational parameters
-
-| File | What to change |
-|------|----------------|
-| `ouroboros/config.py` → `SETTINGS_DEFAULTS` | Models, budgets, timeouts — see Reference 3 section 2.1. Or adjust at runtime via Web UI / env vars |
-| `ouroboros/tool_capabilities.py` → `CORE_TOOL_NAMES` | Add new validation tool names so they're visible from round 1 |
-| `prompts/CONSCIOUSNESS.md` (✏️) | Replace 7 maintenance tasks with validation-oriented ones. See Reference 3, section 2.3 |
-| `docs/CHECKLISTS.md` (✏️) | Add validation-specific review items |
-| `docs/DEVELOPMENT.md` (✏️) | Adapt coding standards if your team differs |
-
-### Level 3 — Safety perimeter
-
-| File | What to change | How to persist changes |
-|------|----------------|----------------------|
-| `prompts/SAFETY.md` (🔒🔄) | Extend DANGEROUS/SUSPICIOUS/SAFE for validation context | Edit source + rebuild, OR remove from `sync_paths` in launcher.py line 101 |
-| `ouroboros/tools/registry.py` (🔒🔄) | Expand `SAFETY_CRITICAL_PATHS` | Same (launcher.py line 102) |
-| `ouroboros/safety.py` (🔒🔄) | Add tools to `CHECKED_TOOLS` if they need LLM safety review | Same (launcher.py line 100) |
-
-### Level 4 — Add validation tools
-
-New tools go in `ouroboros/tools/` as Python modules exporting `get_tools() → List[ToolEntry]`. Auto-discovered at startup. Full 7-step process in Reference 3, section 4:
-
-1. Create file in `ouroboros/tools/`, e.g. `validation.py`
-2. Implement `ToolEntry`: `name` (str), `schema` (JSON Schema dict), `handler` (fn(ctx: ToolContext, **kwargs) → str), optionally `is_code_tool`, `timeout_sec`
-3. Export `get_tools() → List[ToolEntry]`
-4. Add tool names to `CORE_TOOL_NAMES` in `tool_capabilities.py` if needed from round 1
-5. Add to `_BG_TOOL_WHITELIST` in `consciousness.py` (~line 490) if needed in background mode
-6. For frozen builds: add module name to `_FROZEN_TOOL_MODULES` in `registry.py`
-7. Update `docs/ARCHITECTURE.md` and `docs/CHECKLISTS.md`
-
-**ToolContext** provides: `ctx.repo_dir` (Path), `ctx.drive_root` (Path to ~/Ouroboros/data/), `ctx.emit_progress_fn`, `ctx.pending_events`, `ctx.task_id`, `ctx.current_task_type`, `ctx.repo_path(rel)` (safe path with boundary check), `ctx.drive_path(rel)` (same for data dir).
+| File | What was changed |
+|------|-----------------|
+| `prompts/SYSTEM.md` | Ouroboros-V identity, 4 validation self-diagnostics, 6 drift patterns, 3 validation axes, domain context with qual/quant structure |
+| `BIBLE.md` | v5.0: Mission statement, P0/P1/P2/P4/P6 adapted, Validation Hard Limits, Quality Standards (incl. "qualitative before quantitative") |
+| `prompts/CONSCIOUSNESS.md` | 7 validation tasks: effectiveness review, LLM calibration, methodology freshness, pattern mining, literature scan, grooming, pipeline health |
+| `ouroboros/memory.py` | Seed identity: "I am Ouroboros-V... EARLY PHASE... self-assess..." |
+| `ouroboros/tool_capabilities.py` | 13 validation tools in CORE_TOOL_NAMES, 5 in READ_ONLY_PARALLEL_TOOLS |
+| `ouroboros/consciousness.py` | 9 validation tools in _BG_TOOL_WHITELIST |
+| `ouroboros/tools/registry.py` | `sandbox.py` in SAFETY_CRITICAL_PATHS, validation modules in _FROZEN_TOOL_MODULES |
+| `ouroboros/reflection.py` | 7 validation error markers |
+| `docs/CHECKLISTS.md` | 13-item Validation Methodology Commit Checklist (graduated) |
+| `docs/DEVELOPMENT.md` | Validation module conventions |
+| `prompts/SAFETY.md` | Validation-specific DANGEROUS/SUSPICIOUS/SAFE verdicts |
+| `launcher.py` | `sandbox.py` in sync_paths + commit list, PermissionError catch for Docker ro mounts |
 
 ---
 
