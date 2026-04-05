@@ -244,11 +244,11 @@ def _sync_core_files() -> None:
 def _commit_synced_files() -> None:
     """Commit sync'd safety files so git reset --hard doesn't revert them."""
     try:
-        for rel in ["ouroboros/safety.py", "prompts/SAFETY.md", "ouroboros/tools/registry.py"]:
+        for rel in ["ouroboros/safety.py", "prompts/SAFETY.md", "ouroboros/tools/registry.py", "ouroboros/validation/sandbox.py"]:
             _hidden_run(["git", "add", rel], cwd=str(REPO_DIR), check=False, capture_output=True)
         status = _hidden_run(
             ["git", "status", "--porcelain", "--",
-             "ouroboros/safety.py", "prompts/SAFETY.md", "ouroboros/tools/registry.py"],
+             "ouroboros/safety.py", "prompts/SAFETY.md", "ouroboros/tools/registry.py", "ouroboros/validation/sandbox.py"],
             cwd=str(REPO_DIR), capture_output=True, text=True,
         )
         if status.stdout.strip():
