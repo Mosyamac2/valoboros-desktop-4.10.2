@@ -47,32 +47,60 @@ class ValidationPipeline:
         self._results_dir = self._bundle_dir / "results"
         self._results_dir.mkdir(parents=True, exist_ok=True)
         (self._bundle_dir / "methodology" / "custom_checks").mkdir(parents=True, exist_ok=True)
+        self._log_path = self._bundle_dir / "validation.log"
+
+    def _log(self, message: str) -> None:
+        """Append a timestamped line to validation.log."""
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        line = f"[{ts}] {message}\n"
+        with open(self._log_path, "a", encoding="utf-8") as f:
+            f.write(line)
+
+    def _log_stage_result(self, result: ValidationStageResult) -> None:
+        """Log a stage completion summary."""
+        failed = sum(1 for c in result.checks if not c.passed)
+        total = len(result.checks)
+        self._log(f"{result.stage} ({result.stage_name}) {result.status}: {total} checks, {failed} failed, {result.duration_sec:.1f}s")
 
     async def run(self) -> ValidationReport:
         """Execute the full validation pipeline."""
         stages: list[ValidationStageResult] = []
+        self._log(f"Starting validation pipeline for bundle {self._bundle_id}")
 
         # --- S0: Artifact Comprehension (HARD GATE) ---
+        self._log("Starting S0: Artifact Comprehension...")
         profile = await self._run_comprehension()
+        self._log(f"S0 comprehension done: model_type={profile.model_type}, confidence={profile.comprehension_confidence}")
         s0_result = await self._run_stage_module("intake_check", "S0", profile)
         stages.append(s0_result)
         self._save_stage(s0_result)
+        self._log_stage_result(s0_result)
 
         if profile.comprehension_confidence < 0.1 and not profile.comprehension_gaps == []:
-            # Comprehension totally failed — can't proceed meaningfully
+            self._log("HARD GATE: S0 comprehension failed. Aborting pipeline.")
             return self._build_report(stages, profile, error="S0 comprehension failed")
 
         # --- Auto-install detected dependencies before S1 ---
+        self._log(f"Installing {len(profile.dependencies_detected)} detected dependencies...")
         await self._install_dependencies(profile)
+        self._log("Dependency installation complete.")
 
         # --- Methodology planning ---
+        self._log("Starting methodology planning...")
         methodology = await self._plan_methodology(profile)
         active_stages = self._get_active_stages(methodology)
+        if methodology:
+            self._log(f"Methodology plan: {len(methodology.checks_to_run)} checks to run, {len(methodology.checks_to_skip)} skipped, {len(methodology.checks_to_create)} to create. Active stages: {sorted(active_stages)}")
+        else:
+            self._log("Methodology planning failed — all stages active (default).")
 
         # --- S1: Reproducibility (HARD GATE for S2-S7, always runs) ---
+        self._log("Starting S1: Reproducibility...")
         s1_result = await self._run_stage_module("reproducibility", "S1", profile)
         stages.append(s1_result)
         self._save_stage(s1_result)
+        self._log_stage_result(s1_result)
         s1_passed = s1_result.status == "passed"
 
         # --- S2-S7: Run if S1 passed AND stage is in methodology plan ---
@@ -85,16 +113,20 @@ class ValidationPipeline:
         if s1_passed:
             for module_name, stage_id, stage_name in sandbox_stages:
                 if stage_id in active_stages:
+                    self._log(f"Starting {stage_id}: {stage_name}...")
                     result = await self._run_stage_module(module_name, stage_id, profile)
                     stages.append(result)
                     self._save_stage(result)
+                    self._log_stage_result(result)
                 else:
+                    self._log(f"Skipping {stage_id} ({stage_name}): not in methodology plan.")
                     stages.append(ValidationStageResult(
                         stage=stage_id, stage_name=stage_name, status="skipped",
                         checks=[], duration_sec=0.0,
                         error_message=f"Skipped by methodology plan.",
                     ))
         else:
+            self._log("S1 failed — skipping S2, S3, S6, S7 (sandbox-dependent stages).")
             for _, stage_id, stage_name in sandbox_stages:
                 stages.append(ValidationStageResult(
                     stage=stage_id, stage_name=stage_name, status="skipped",
@@ -110,10 +142,13 @@ class ValidationPipeline:
         ]
         for module_name, stage_id, stage_name in deterministic_stages:
             if stage_id in active_stages:
+                self._log(f"Starting {stage_id}: {stage_name}...")
                 result = await self._run_stage_module(module_name, stage_id, profile)
                 stages.append(result)
                 self._save_stage(result)
+                self._log_stage_result(result)
             else:
+                self._log(f"Skipping {stage_id} ({stage_name}): not in methodology plan.")
                 stages.append(ValidationStageResult(
                     stage=stage_id, stage_name=stage_name, status="skipped",
                     checks=[], duration_sec=0.0,
@@ -121,6 +156,7 @@ class ValidationPipeline:
                 ))
 
         # --- S9: Synthesis (receives prior stage results) ---
+        self._log("Starting S9: Synthesis & Improvement Plan...")
         from ouroboros.validation.synthesis import run_stage as synthesis_run
         s9_result = await synthesis_run(
             self._bundle_dir, profile, self._check_registry,
@@ -128,6 +164,7 @@ class ValidationPipeline:
         )
         stages.append(s9_result)
         self._save_stage(s9_result)
+        self._log_stage_result(s9_result)
 
         # Load recommendations from improvement/plan.json (written by synthesis)
         hard_recs, soft_recs = self._load_recommendations()
@@ -137,17 +174,22 @@ class ValidationPipeline:
         # Save via ReportGenerator
         from ouroboros.validation.report import ReportGenerator
         ReportGenerator().save(report, self._bundle_dir, self._config)
+        self._log(f"Report generated: verdict={report.overall_verdict}, {len(report.critical_findings)} critical findings, {len(report.hard_recommendations)} hard recs, {len(report.soft_recommendations)} soft recs")
 
         # --- Tier 0 self-assessment (if enabled) ---
         if self._config.auto_self_assess:
+            self._log("Running Tier 0 self-assessment...")
             try:
                 from ouroboros.validation.self_assessment import run_self_assessment
                 from ouroboros.validation.effectiveness import EffectivenessTracker
                 tracker = EffectivenessTracker(self._bundle_dir.parent)
                 await run_self_assessment(self._bundle_dir, report, self._config, tracker)
+                self._log("Self-assessment complete.")
             except Exception as exc:
+                self._log(f"Self-assessment failed: {exc}")
                 log.warning("Self-assessment failed: %s", exc)
 
+        self._log("Pipeline complete.")
         return report
 
     async def run_single_stage(self, stage: str) -> ValidationStageResult:
