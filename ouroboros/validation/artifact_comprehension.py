@@ -80,6 +80,11 @@ class ArtifactComprehension:
 
     async def analyze(self) -> ModelProfile:
         """Run LLM comprehension and return a ModelProfile."""
+
+        # Phase 1: Deterministic dependency extraction (fast, no LLM)
+        dep_report = self._extract_dependencies()
+
+        # Phase 2: LLM comprehension
         task = self._read_text("inputs/task.txt")
         data_description = self._read_text("inputs/data_description.txt")
         code_summary = self._collect_code()
@@ -102,6 +107,18 @@ class ArtifactComprehension:
         # Ensure bundle_id is set
         profile_dict["bundle_id"] = self._bundle_id
 
+        # Phase 3: Merge deterministic deps with LLM-inferred deps
+        llm_deps = profile_dict.get("dependencies_detected", [])
+        merged_deps = dep_report.all_packages()
+        # Add any LLM-detected packages not already in the deterministic list
+        merged_lower = {p.lower().split("=")[0].split(">")[0].split("<")[0]
+                        for p in merged_deps}
+        for dep in llm_deps:
+            dep_clean = dep.strip().split("=")[0].split(">")[0].split("<")[0].strip()
+            if dep_clean.lower() not in merged_lower:
+                merged_deps.append(dep_clean)
+        profile_dict["dependencies_detected"] = merged_deps
+
         profile = ModelProfile.from_dict(profile_dict)
 
         # Write outputs to inferred/
@@ -111,8 +128,36 @@ class ArtifactComprehension:
             json.dumps(profile.to_dict(), indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        # Also write dependency report for transparency
+        (inferred / "dependency_report.json").write_text(
+            json.dumps({
+                "imports_found": dep_report.imports_found,
+                "pip_packages": dep_report.pip_packages,
+                "pip_magic": dep_report.pip_magic,
+                "requirements_txt": dep_report.requirements_txt,
+                "unmapped": dep_report.unmapped,
+                "merged_install_list": merged_deps,
+                "source_files": dep_report.source_files,
+            }, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
         return profile
+
+    def _extract_dependencies(self):
+        """Run deterministic AST-based dependency extraction."""
+        from ouroboros.validation.dependency_extractor import DependencyExtractor, DependencyReport
+        code_dir = self._bundle_dir / "raw" / "model_code"
+        if not code_dir.exists():
+            return DependencyReport()
+        extractor = DependencyExtractor(code_dir)
+        report = extractor.extract()
+        log.info(
+            "Dependency extraction: %d imports → %d pip packages (+ %d from pip magic, %d from requirements.txt)",
+            len(report.imports_found), len(report.pip_packages),
+            len(report.pip_magic), len(report.requirements_txt),
+        )
+        return report
 
     # ------------------------------------------------------------------
     # File readers

@@ -61,6 +61,9 @@ class ValidationPipeline:
             # Comprehension totally failed — can't proceed meaningfully
             return self._build_report(stages, profile, error="S0 comprehension failed")
 
+        # --- Auto-install detected dependencies before S1 ---
+        await self._install_dependencies(profile)
+
         # --- S1: Reproducibility (HARD GATE for S2-S7) ---
         s1_result = await self._run_stage_module("reproducibility", "S1", profile)
         stages.append(s1_result)
@@ -151,6 +154,22 @@ class ValidationPipeline:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    async def _install_dependencies(self, profile: ModelProfile) -> None:
+        """Install detected dependencies into the sandbox venv before S1."""
+        deps = profile.dependencies_detected
+        if not deps:
+            log.info("No dependencies to install.")
+            return
+        log.info("Installing %d detected dependencies: %s", len(deps), deps)
+        result = self._sandbox.install_dependencies(deps)
+        log.info("Dependency install result: %s", result[:300])
+        # Save install log for transparency
+        install_log = self._results_dir / "dependency_install.log"
+        install_log.write_text(
+            f"Packages: {deps}\n\nResult:\n{result}\n",
+            encoding="utf-8",
+        )
 
     async def _run_comprehension(self) -> ModelProfile:
         """Run S0 artifact comprehension to produce ModelProfile."""
