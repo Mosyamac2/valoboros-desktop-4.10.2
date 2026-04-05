@@ -237,7 +237,10 @@ def _sync_core_files() -> None:
         dst = REPO_DIR / rel
         if src.exists():
             dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
+            try:
+                shutil.copy2(src, dst)
+            except PermissionError:
+                log.debug("Skipped sync for read-only file: %s", rel)
     log.info("Synced %d core files to %s", len(sync_paths), REPO_DIR)
 
 
