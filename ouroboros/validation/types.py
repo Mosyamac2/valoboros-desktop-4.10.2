@@ -277,6 +277,36 @@ class MethodologyPlan:
 
 
 # ---------------------------------------------------------------------------
+# ModelResearchResult
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ModelResearchResult:
+    queries_used: list[str] = field(default_factory=list)
+    papers_found: int = 0
+    relevant_papers: list[Any] = field(default_factory=list)  # list[PaperSummary]
+    risk_insights: list[str] = field(default_factory=list)
+    applicable_techniques: list[str] = field(default_factory=list)
+    suggested_checks: list[dict[str, Any]] = field(default_factory=list)
+    knowledge_written: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "queries_used": self.queries_used,
+            "papers_found": self.papers_found,
+            "relevant_papers": [p.to_dict() if hasattr(p, "to_dict") else p for p in self.relevant_papers],
+            "risk_insights": self.risk_insights,
+            "applicable_techniques": self.applicable_techniques,
+            "suggested_checks": self.suggested_checks,
+            "knowledge_written": self.knowledge_written,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ModelResearchResult:
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+# ---------------------------------------------------------------------------
 # PaperSummary
 # ---------------------------------------------------------------------------
 
@@ -407,6 +437,9 @@ class ValidationConfig:
     max_soft_recommendations: int = 10
     inbox_dir: str = "ml-models-to-validate"
     auto_ingest: bool = True
+    pre_research: bool = True
+    research_max_queries: int = 3
+    research_max_papers: int = 5
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
