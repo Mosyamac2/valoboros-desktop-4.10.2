@@ -131,7 +131,58 @@ def _delete_validation_check(ctx: ToolContext, check_id: str, reason: str) -> st
 
 
 def _run_improvement_cycle(ctx: ToolContext, bundle_id: str) -> str:
-    return "Not yet implemented — will be completed in Prompt 10."
+    from ouroboros.validation.config_loader import load_validation_config
+    from ouroboros.validation.model_improver import ModelImprover
+    from ouroboros.validation.pipeline import RevalidationPipeline
+    from ouroboros.validation.sandbox import ModelSandbox
+    from ouroboros.validation.types import ImprovementRecommendation
+
+    config = load_validation_config()
+    bundle_dir = ctx.drive_root / "validations" / bundle_id
+    if not bundle_dir.exists():
+        return f"Bundle not found: {bundle_id}"
+
+    # Load recommendations
+    plan_path = bundle_dir / "improvement" / "plan.json"
+    if not plan_path.exists():
+        return "No improvement plan found. Run validation first."
+    plan_data = json.loads(plan_path.read_text(encoding="utf-8"))
+    hard_recs = [ImprovementRecommendation.from_dict(r) for r in plan_data.get("hard", [])]
+    if not hard_recs:
+        return "No hard recommendations to implement."
+
+    sandbox = ModelSandbox(bundle_dir, config)
+
+    # Step 1: Implement recommendations
+    improver = ModelImprover(bundle_dir, hard_recs, sandbox, config)
+    impl_result = asyncio.get_event_loop().run_until_complete(improver.implement())
+
+    if not impl_result.recommendations_applied:
+        skipped_summary = "; ".join(f"{c}: {r}" for c, r in impl_result.recommendations_skipped)
+        return f"No recommendations could be implemented. Skipped: {skipped_summary}"
+
+    # Step 2: Extract original metrics from report
+    report_path = bundle_dir / "results" / "report.json"
+    original_metrics: dict = {}
+    if report_path.exists():
+        report_data = json.loads(report_path.read_text(encoding="utf-8"))
+        for stage in report_data.get("stages", []):
+            for check in stage.get("checks", []):
+                if check.get("score") is not None:
+                    original_metrics[check["check_id"]] = check["score"]
+
+    # Step 3: Revalidate
+    reval = RevalidationPipeline(bundle_id, bundle_dir, ctx.repo_dir, config)
+    reval_result = asyncio.get_event_loop().run_until_complete(
+        reval.run(original_metrics, impl_result.recommendations_applied,
+                  impl_result.recommendations_skipped)
+    )
+
+    return (
+        f"Improvement cycle complete. Applied: {len(impl_result.recommendations_applied)}, "
+        f"Skipped: {len(impl_result.recommendations_skipped)}. "
+        f"Verdict: {reval_result.verdict}, lift: {reval_result.improvement_lift:.4f}."
+    )
 
 
 def _compare_validations(ctx: ToolContext, bundle_id_a: str, bundle_id_b: str) -> str:

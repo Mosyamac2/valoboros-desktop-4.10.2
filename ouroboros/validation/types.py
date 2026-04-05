@@ -217,6 +217,41 @@ class RevalidationResult:
 
 
 # ---------------------------------------------------------------------------
+# ImproverResult
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ImproverResult:
+    recommendations_applied: list[str]                    # check_ids of applied recs
+    recommendations_skipped: list[tuple[str, str]]        # (check_id, reason)
+    modified_files: list[str]                             # paths of modified files
+    sandbox_output: Optional[SandboxResult] = None        # final sandbox run
+    new_metrics: Optional[dict[str, float]] = None        # if pipeline ran successfully
+
+    def to_dict(self) -> dict[str, Any]:
+        d = {
+            "recommendations_applied": self.recommendations_applied,
+            "recommendations_skipped": self.recommendations_skipped,
+            "modified_files": self.modified_files,
+            "new_metrics": self.new_metrics,
+        }
+        if self.sandbox_output:
+            d["sandbox_output"] = self.sandbox_output.to_dict()
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ImproverResult:
+        so = d.get("sandbox_output")
+        return cls(
+            recommendations_applied=d.get("recommendations_applied", []),
+            recommendations_skipped=d.get("recommendations_skipped", []),
+            modified_files=d.get("modified_files", []),
+            sandbox_output=SandboxResult.from_dict(so) if so else None,
+            new_metrics=d.get("new_metrics"),
+        )
+
+
+# ---------------------------------------------------------------------------
 # ModelProfile
 # ---------------------------------------------------------------------------
 

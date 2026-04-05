@@ -19,6 +19,7 @@ from ouroboros.validation.types import (
     CheckResult,
     ImprovementRecommendation,
     ModelProfile,
+    RevalidationResult,
     ValidationConfig,
     ValidationReport,
     ValidationStageResult,
@@ -281,8 +282,168 @@ class ValidationPipeline:
 
 
 class RevalidationPipeline:
-    """Stub — will be completed in Prompt 10."""
-    pass
+    """Re-run S2-S7 on improved code and compare with original metrics."""
+
+    def __init__(
+        self,
+        bundle_id: str,
+        bundle_dir: Path,
+        repo_dir: Path,
+        config: ValidationConfig,
+    ) -> None:
+        self._bundle_id = bundle_id
+        self._bundle_dir = Path(bundle_dir)
+        self._repo_dir = repo_dir
+        self._config = config
+        self._check_registry = CheckRegistry(repo_dir)
+        # Sandbox for improved code uses the improvement directory
+        self._sandbox = ModelSandbox(self._bundle_dir / "improvement" / "implementation", config)
+        self._reval_dir = self._bundle_dir / "improvement" / "revalidation"
+        self._reval_dir.mkdir(parents=True, exist_ok=True)
+
+    async def run(
+        self,
+        original_metrics: dict[str, float],
+        recommendations_applied: list[str],
+        recommendations_skipped: list[tuple[str, str]],
+    ) -> RevalidationResult:
+        """Run S2-S7 on improved model, compare with original, compute lift."""
+        # Load profile
+        profile = self._load_profile()
+
+        # Re-run S2-S7 stages on improved code
+        improved_stages: list[ValidationStageResult] = []
+        for module_name, stage_id in [
+            ("performance", "S2"), ("fit_quality", "S3"),
+            ("leakage", "S4"), ("fairness", "S5"),
+            ("sensitivity", "S6"), ("robustness", "S7"),
+        ]:
+            try:
+                import importlib
+                mod = importlib.import_module(f"ouroboros.validation.{module_name}")
+                result = await mod.run_stage(
+                    self._bundle_dir / "improvement" / "implementation",
+                    profile, self._check_registry, self._sandbox, self._config,
+                )
+            except Exception as exc:
+                result = ValidationStageResult(
+                    stage=stage_id, stage_name=module_name, status="error",
+                    checks=[], duration_sec=0.0, error_message=str(exc),
+                )
+            improved_stages.append(result)
+            # Save stage result
+            stage_path = self._reval_dir / f"stage_{stage_id}.json"
+            stage_path.write_text(
+                json.dumps(result.to_dict(), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+        # Extract improved metrics from check scores
+        improved_metrics = self._extract_metrics(improved_stages)
+
+        # Compute deltas and lift
+        all_keys = set(original_metrics.keys()) | set(improved_metrics.keys())
+        deltas: dict[str, float] = {}
+        lifts: list[float] = []
+        for k in all_keys:
+            orig = original_metrics.get(k, 0.0)
+            impr = improved_metrics.get(k, 0.0)
+            delta = impr - orig
+            deltas[k] = round(delta, 6)
+            if abs(orig) > 1e-9:
+                lifts.append(delta / abs(orig))
+
+        aggregate_lift = sum(lifts) / len(lifts) if lifts else 0.0
+        threshold = self._config.improvement_lift_threshold
+
+        # Determine verdict
+        if aggregate_lift > threshold:
+            verdict = "improved"
+        elif aggregate_lift < -threshold:
+            verdict = "degraded"
+        elif lifts and any(l > threshold for l in lifts) and any(l < -threshold for l in lifts):
+            verdict = "mixed"
+        else:
+            verdict = "unchanged"
+
+        result = RevalidationResult(
+            original_bundle_id=self._bundle_id,
+            improved_bundle_id=f"{self._bundle_id}_improved",
+            original_metrics=original_metrics,
+            improved_metrics=improved_metrics,
+            metric_deltas=deltas,
+            improvement_lift=round(aggregate_lift, 6),
+            recommendations_applied=recommendations_applied,
+            recommendations_skipped=[f"{cid}: {reason}" for cid, reason in recommendations_skipped],
+            verdict=verdict,
+        )
+
+        # Save revalidation result
+        (self._reval_dir / "revalidation_result.json").write_text(
+            json.dumps(result.to_dict(), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+        # Record in effectiveness tracker
+        self._record_effectiveness(result, recommendations_applied)
+
+        return result
+
+    def _load_profile(self) -> ModelProfile:
+        profile_path = self._bundle_dir / "inferred" / "model_profile.json"
+        if profile_path.exists():
+            return ModelProfile.from_dict(
+                json.loads(profile_path.read_text(encoding="utf-8"))
+            )
+        return ModelProfile(
+            bundle_id=self._bundle_id, task_description="unknown",
+            model_type="other", model_type_confidence=0.0,
+            framework="other", framework_confidence=0.0,
+            algorithm="unknown", data_format="tabular",
+        )
+
+    @staticmethod
+    def _extract_metrics(stages: list[ValidationStageResult]) -> dict[str, float]:
+        """Extract numeric scores from check results as metrics."""
+        metrics: dict[str, float] = {}
+        for stage in stages:
+            for check in stage.checks:
+                if check.score is not None:
+                    metrics[check.check_id] = check.score
+        return metrics
+
+    def _record_effectiveness(
+        self,
+        result: RevalidationResult,
+        applied_check_ids: list[str],
+    ) -> None:
+        """Record Signal A (rec quality) and Signal B (finding quality) in tracker."""
+        try:
+            from ouroboros.validation.effectiveness import EffectivenessTracker
+            tracker = EffectivenessTracker(self._bundle_dir.parent)
+            threshold = self._config.improvement_lift_threshold
+
+            for check_id in applied_check_ids:
+                # Signal A: recommendation quality (direct measurement)
+                tracker.record_recommendation_result(
+                    check_id, self._bundle_id,
+                    result.original_metrics, result.improved_metrics,
+                )
+
+                # Signal B: inferred finding quality (weaker signal)
+                if result.improvement_lift > threshold:
+                    tracker.record_finding_feedback(
+                        check_id, self._bundle_id, "true_positive",
+                        source="improvement_inferred", weight=0.5,
+                    )
+                elif result.improvement_lift < -threshold:
+                    tracker.record_finding_feedback(
+                        check_id, self._bundle_id, "false_positive",
+                        source="improvement_inferred", weight=0.3,
+                    )
+                # unchanged → no finding quality signal
+        except Exception as exc:
+            log.warning("Failed to record effectiveness: %s", exc)
 
 
 def _utc_now() -> str:
