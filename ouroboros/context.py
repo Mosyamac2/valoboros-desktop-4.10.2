@@ -96,6 +96,25 @@ def build_runtime_section(env: Any, task: Dict[str, Any]) -> str:
     }
     if budget_info:
         runtime_data["budget"] = budget_info
+
+    # --- Validation platform state ---
+    try:
+        from ouroboros.validation.effectiveness import EffectivenessTracker
+        tracker = EffectivenessTracker(env.drive_root)
+        platform_metrics = tracker.get_platform_metrics()
+        runtime_data["validation"] = {
+            "maturity_phase": platform_metrics.maturity_phase,
+            "total_validations": platform_metrics.total_validations,
+            "mean_finding_precision": round(platform_metrics.mean_finding_precision, 3),
+            "mean_improvement_lift": round(platform_metrics.mean_improvement_lift, 4),
+            "total_improvement_cycles": platform_metrics.total_improvement_cycles,
+        }
+        targets = tracker.get_evolution_targets()
+        if targets:
+            runtime_data["validation"]["top_evolution_target"] = targets[0].description
+    except Exception:
+        pass  # validation platform not initialized yet — skip silently
+
     runtime_ctx = json.dumps(runtime_data, ensure_ascii=False, indent=2)
     return "## Runtime context\n\n" + runtime_ctx
 

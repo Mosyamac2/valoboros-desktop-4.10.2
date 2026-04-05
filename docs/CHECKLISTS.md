@@ -71,3 +71,26 @@ than the diff-only triad.
 - Any critical FAIL must cite a concrete file, symbol, prompt, doc, test, config, or sibling flow.
 - If the reviewer cannot point to an exact touchpoint, the FAIL must be advisory, not critical.
 - Scope affects only unchanged code outside the diff. The diff itself remains fully reviewable.
+
+---
+
+## Validation Methodology Commit Checklist
+
+Applied when committing changes to `ouroboros/validation/checks/` or
+`ouroboros/validation/check_manifest.json`.
+
+| # | Check | Severity |
+|---|-------|----------|
+| 1 | check_id unique and follows naming convention (S{N}.{category}.{name}) | critical |
+| 2 | CheckResult fields fully populated (no empty details/evidence) | critical |
+| 3 | Hard recommendations have implementation_sketch; soft recommendations have infeasibility reason | critical |
+| 4 | **Early phase:** backtested against >= 1 historical bundle, code runs without error. **Mature phase:** backtested against >= 3 bundles with Tier 1/2 feedback, metric improved | critical (graduated) |
+| 5 | No regression in other checks on backtest bundles (mature phase only; early phase: no crash in other checks) | critical (graduated) |
+| 6 | Finding quality and recommendation quality tracked independently in commit message | critical |
+| 7 | Sandbox isolation: model code never escapes subprocess | critical |
+| 8 | No training data or PII in check output/evidence | critical |
+| 9 | Stage timeout respected (async cancellation on exceed) | warning |
+| 10 | Heavy dependencies imported lazily (not at module level) | warning |
+| 11 | methodology_version bumped in config.py | conditional critical |
+| 12 | check_manifest.json updated | conditional critical |
+| 13 | ARCHITECTURE.md updated if new stage or tool added | conditional critical |

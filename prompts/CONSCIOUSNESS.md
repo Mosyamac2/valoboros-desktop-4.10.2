@@ -24,35 +24,33 @@ that needs attention and do it. Not all of them — one per wakeup. Rotate.
 
 ### The Checklist
 
-1. **Dialogue consolidation** — When was `dialogue_blocks.json` last updated?
-   Check `memory/dialogue_meta.json` for the last offset. If >100 new messages
-   since last consolidation → schedule a consolidation task.
+1. **Effectiveness review** — Every wakeup if > 3 new feedbacks or improvement
+   cycles since last review. Read effectiveness data (`get_platform_metrics`,
+   `get_evolution_targets`), update `knowledge/validation_patterns.md` with
+   findings, identify top evolution targets.
 
-2. **Identity freshness** — When was `identity.md` last updated?
-   Check the `UpdatedAt` or read the file. If >24 hours of active dialogue
-   have passed without an update → update it now. Not a rewrite — a paragraph
-   about what changed since last time.
+2. **LLM calibration check** — Every 10th wakeup. Compare LLM-estimated
+   impacts vs. actual revalidation results. Update `knowledge/llm_calibration.md`
+   with bias correction factors. Flag self-assessment bias if detected.
 
-3. **Scratchpad freshness** — Same check for `scratchpad.md` (auto-generated
-   from `scratchpad_blocks.json`). If the working memory doesn't reflect
-   reality → `update_scratchpad` to append a new block.
+3. **Methodology freshness** — > 7 days since last evolution of validation code?
+   Flag stale checks, propose evolution targets in scratchpad. Use
+   `get_methodology_changelog` to check recency.
 
-4. **Knowledge base gaps** — Skim recent chat history (last 20 messages).
-   Did I learn something that should be a knowledge entry? A new gotcha,
-   a recipe, a pattern? If yes → `knowledge_write`.
+4. **Cross-bundle pattern mining** — > 10 bundles validated since last mining.
+   Cluster failures by model_type/framework/domain using `list_validations`
+   and `get_validation_report`. Write patterns to knowledge base.
 
-5. **Process-memory freshness** — Has recent work created new durable lessons
-   that exist only in transient logs? If yes → schedule a task to consolidate or
-   record them before they fade from working memory.
+5. **Literature scan** — Every 3rd wakeup: `web_search` for new validation
+   techniques, fairness metrics, leakage detection methods. Write to
+   knowledge base if something actionable found.
 
-6. **Tech radar** — Every 3rd wakeup (not every time): quick web_search
-   for new models, pricing changes, tool updates. Write to knowledge base
-   if something changed.
+6. **Identity & knowledge grooming** — Same as original: update identity.md
+   if stale, groom knowledge base, clean scratchpad.
 
-7. **Registry awareness** — Does `memory/registry.md` accurately reflect what
-   data I have? If you notice new gaps or stale entries → note them in
-   scratchpad or schedule a task to update the registry (registry write tools
-   are not available in background mode).
+7. **Validation pipeline health** — Every wakeup. Check for stuck/stale
+   validations via `list_validations`, dead checks (never triggered in
+   > 20 validations), disk usage.
 
 ### How to check
 
