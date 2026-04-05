@@ -19,6 +19,10 @@ __pycache__/
 .ruff_cache/
 .pyinstaller-cache/
 
+# Validation inbox (runtime data, lives in DATA_DIR)
+ml-models-to-validate/
+validation_data/
+
 # Virtual environments
 venv/
 .venv/
