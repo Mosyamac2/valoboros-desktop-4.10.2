@@ -55,6 +55,12 @@ CORE_TOOL_NAMES: frozenset[str] = frozenset({
     "request_restart", "promote_to_stable",
     # Advisory pre-review gate
     "advisory_pre_review", "review_status",
+    # Validation platform
+    "ingest_model_artifacts", "list_validations", "get_validation_status",
+    "run_validation", "run_validation_stage", "get_validation_report",
+    "get_model_profile", "list_validation_checks", "create_validation_check",
+    "edit_validation_check", "disable_validation_check", "delete_validation_check",
+    "run_improvement_cycle",
 })
 
 # Meta-tools: always visible alongside core tools
@@ -71,6 +77,9 @@ READ_ONLY_PARALLEL_TOOLS: frozenset[str] = frozenset({
     "data_read", "data_list",
     "code_search",
     "web_search", "codebase_digest", "chat_history",
+    # Validation platform (read-only)
+    "get_validation_report", "get_model_profile", "list_validation_checks",
+    "list_validations", "get_validation_status",
 })
 
 # ---------------------------------------------------------------------------

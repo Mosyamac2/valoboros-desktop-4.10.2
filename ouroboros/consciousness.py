@@ -498,6 +498,11 @@ class BackgroundConsciousness:
         "chat_history",
         # GitHub Issues
         "list_github_issues", "get_github_issue",
+        # Validation platform (read-only)
+        "list_validations", "get_validation_status", "get_validation_report",
+        "get_model_profile", "list_validation_checks",
+        "get_finding_effectiveness", "get_recommendation_effectiveness",
+        "get_platform_metrics", "get_evolution_targets",
     })
 
     def _build_registry(self) -> "ToolRegistry":
