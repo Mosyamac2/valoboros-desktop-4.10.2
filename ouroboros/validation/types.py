@@ -317,6 +317,8 @@ class ValidationConfig:
     improvement_lift_threshold: float = 0.01
     max_hard_recommendations: int = 10
     max_soft_recommendations: int = 10
+    inbox_dir: str = "ml-models-to-validate"
+    auto_ingest: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

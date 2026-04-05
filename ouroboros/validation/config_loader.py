@@ -32,6 +32,8 @@ _KEY_MAP: dict[str, str] = {
     "OUROBOROS_VALIDATION_IMPROVEMENT_LIFT_THRESHOLD": "improvement_lift_threshold",
     "OUROBOROS_VALIDATION_MAX_HARD_RECOMMENDATIONS": "max_hard_recommendations",
     "OUROBOROS_VALIDATION_MAX_SOFT_RECOMMENDATIONS": "max_soft_recommendations",
+    "OUROBOROS_VALIDATION_INBOX_DIR": "inbox_dir",
+    "OUROBOROS_VALIDATION_AUTO_INGEST": "auto_ingest",
 }
 
 
