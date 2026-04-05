@@ -9,8 +9,8 @@ let currentPage = null;
 
 export function initValidation({ ws, state }) {
     const page = document.createElement('div');
-    page.id = 'validation-page';
-    page.style.display = 'none';
+    page.id = 'page-validation';
+    page.className = 'page';
     page.innerHTML = `
         <div class="validation-layout">
             <section class="upload-section">
@@ -264,15 +264,14 @@ export function initValidation({ ws, state }) {
     }
 
     // --- Page lifecycle ---
-    // Listen for page show/hide via the nav system
-    const observer = new MutationObserver(() => {
-        if (page.style.display !== 'none') {
+    // Listen for page show/hide via the nav system (uses .page.active class)
+    window.addEventListener('ouro:page-shown', (e) => {
+        if (e.detail.page === 'validation') {
             startPolling();
         } else {
             stopPolling();
         }
     });
-    observer.observe(page, { attributes: true, attributeFilter: ['style'] });
 
     // --- Helpers ---
     function escapeHtml(str) {
