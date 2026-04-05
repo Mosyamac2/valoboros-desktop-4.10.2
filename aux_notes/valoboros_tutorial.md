@@ -2,20 +2,168 @@
 
 A step-by-step guide to the self-evolving ML model validation platform.
 
+**Audience:** This tutorial has two tracks:
+- **Part 0** — Server admin: how to deploy and maintain Valoboros on a remote server
+- **Parts 1-7** — User/developer: how to validate models, use the learning loop, and understand the system
+
 ---
 
-## Prerequisites
+## Part 0: Server Admin Guide
+
+Everything a server administrator needs to deploy and maintain Valoboros.
+
+### Option A: Docker deployment (recommended for production)
 
 ```bash
-# 1. Python 3.10+ with venv
+# 1. Clone the repo
+git clone https://github.com/Mosyamac2/valoboros-desktop-4.10.2.git /opt/valoboros
+cd /opt/valoboros
+
+# 2. Configure API keys
+cp .env.example .env
+nano .env
+# Required: OPENROUTER_API_KEY=sk-or-v1-your-key
+# Optional: OUROBOROS_NETWORK_PASSWORD=your-password (for remote access)
+# Optional: TOTAL_BUDGET=50 (API spend limit in USD)
+# Optional: GITHUB_TOKEN + GITHUB_REPO (for evolution tracking)
+
+# 3. Build and launch
+docker compose up -d --build
+
+# 4. Verify it's running
+docker compose logs -f --tail=20
+# Should see: "Uvicorn running on http://0.0.0.0:8765"
+```
+
+Open `http://your-server-ip:8765` in your browser.
+
+**Security features in Docker:**
+- 5 safety-critical files mounted as **read-only** (agent cannot modify BIBLE.md, safety.py, registry.py, SAFETY.md, sandbox.py)
+- Non-root container user (`valoboros`, UID 1000)
+- All capabilities dropped except `SYS_ADMIN` (for sandbox network isolation)
+- Resource limits: 6 GB RAM, 4 CPU (configurable in `docker-compose.yml`)
+- `no-new-privileges` enforced
+
+**Daily operations:**
+
+```bash
+docker compose logs -f --tail=100     # Live logs
+docker compose down                   # Stop (data preserved)
+docker compose up -d                  # Start
+docker compose restart                # Restart
+docker compose up -d --build          # Rebuild after code update
+
+# Backup persistent data
+docker run --rm -v valoboros-data:/data -v $(pwd)/backups:/backup \
+    alpine tar czf /backup/valoboros-data-$(date +%Y%m%d).tar.gz /data
+```
+
+**Warning:** `docker compose down -v` deletes volumes (all validation data lost). Always use `docker compose down` without `-v`.
+
+### Option B: Bare Python (for development/testing)
+
+```bash
+# 1. Clone and setup
+git clone https://github.com/Mosyamac2/valoboros-desktop-4.10.2.git
+cd valoboros-desktop-4.10.2
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install pandas nbformat nbconvert arxiv pyarrow openpyxl
+
+# 2. Set API key
+export OPENROUTER_API_KEY="sk-or-v1-your-key"
+
+# 3. Launch
+python server.py --host 0.0.0.0 --port 8765
+
+# 4. Run in background (optional)
+tmux new -s valoboros
+export OPENROUTER_API_KEY="sk-or-v1-your-key"
+python server.py --host 0.0.0.0 --port 8765
+# Ctrl+B then D to detach; tmux attach -t valoboros to reconnect
+```
+
+**Stop the server:**
+- `Ctrl+C` if running in foreground
+- `kill <pid>` (SIGTERM, graceful shutdown) if running in background
+- `/panic` in the web UI for emergency stop
+
+### Server requirements
+
+| Tier | vCPU | RAM | Disk | What it handles |
+|------|------|-----|------|----------------|
+| **Minimum** | 2 | 4 GB | 30 GB | Small sklearn models, tabular data < 100K rows |
+| **Recommended** | 4 | 8 GB | 50 GB | Most tabular models (XGBoost, CatBoost, LightGBM) |
+| **Comfortable** | 8 | 16 GB | 100 GB | Large models, PyTorch/TensorFlow, multiple validations |
+
+### First-time setup in the web UI
+
+After the server starts:
+
+1. Open `http://your-server-ip:8765`
+2. The onboarding wizard guides you through API key setup
+3. Go to **Settings** tab to configure:
+   - `GITHUB_TOKEN` + `GITHUB_REPO` — for tracking Valoboros evolution on GitHub
+   - `TOTAL_BUDGET` — API spend limit
+   - Model selections (Sonnet for cost savings, Opus for quality)
+4. Click **`/bg start`** in the Chat header to enable background consciousness
+
+### Key directories
+
+| Path | What | Persists in Docker? |
+|------|------|-------------------|
+| `~/Ouroboros/data/` | All runtime data (settings, memory, knowledge, logs) | Yes (valoboros-data volume) |
+| `~/Ouroboros/data/validations/` | Validation bundles with results and reports | Yes |
+| `~/Ouroboros/data/ml-models-to-validate/` | Inbox: upload ZIPs here for validation | Yes |
+| `~/Ouroboros/repo/` | Agent's self-modified code repository | Yes (valoboros-repo volume) |
+
+### Monitoring
+
+```bash
+# Container health
+docker inspect --format='{{.State.Health.Status}}' valoboros
+
+# Resource usage
+docker stats valoboros --no-stream
+
+# Platform metrics
+docker compose exec valoboros python -c "
+from ouroboros.validation.effectiveness import EffectivenessTracker
+from pathlib import Path
+t = EffectivenessTracker(Path('/data'))
+m = t.get_platform_metrics()
+print(f'Phase: {m.maturity_phase}, Validations: {m.total_validations}')
+print(f'Finding precision: {m.mean_finding_precision:.2f}')
+print(f'Improvement lift: {m.mean_improvement_lift:.4f}')
+"
+```
+
+### Updating to a new version
+
+```bash
+cd /opt/valoboros
+git pull
+docker compose up -d --build
+# Data volumes persist across rebuilds
+```
+
+---
+
+## Prerequisites (for Parts 1-7)
+
+If running from source (not Docker):
+
+```bash
 cd /path/to/ouroboros-desktop-4.10.2
 source .venv/bin/activate
-
-# 2. Set your OpenRouter API key (the only required key)
 export OPENROUTER_API_KEY="sk-or-v1-your-key-here"
+```
 
-# 3. Ensure pandas is installed (for data analysis)
-pip install pandas nbformat nbconvert arxiv
+If running via Docker, all commands in Parts 1-7 can be run inside the container:
+
+```bash
+docker compose exec valoboros python -c "..."
 ```
 
 ---
