@@ -252,6 +252,27 @@ class ImproverResult:
 
 
 # ---------------------------------------------------------------------------
+# ReflectionResult
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ReflectionResult:
+    total_validations_analyzed: int = 0
+    patterns_found: list[dict[str, Any]] = field(default_factory=list)
+    # Each pattern: {"check_id": str, "frequency": int, "model_types": list[str], "description": str}
+    dead_checks: list[str] = field(default_factory=list)   # check_ids that never triggered
+    hot_checks: list[str] = field(default_factory=list)    # check_ids that always trigger
+    knowledge_entries_written: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> ReflectionResult:
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+# ---------------------------------------------------------------------------
 # ModelProfile
 # ---------------------------------------------------------------------------
 
