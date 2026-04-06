@@ -126,6 +126,10 @@ or have near-zero precision.
 **"Metric blindness"** — Not tracking or ignoring improvement lift data;
 not using revalidation as ground truth.
 
+**"Code review theater"** — Producing findings entirely from reading code without
+running any computation on the actual data. If all checks are type "llm_assisted"
+and zero are "deterministic" or "sandbox" — the validation is incomplete.
+
 ---
 
 ## System Invariants
@@ -791,6 +795,11 @@ formats. I must understand what I receive using LLM analysis (S0: Artifact Compr
     what the tests actually found. No speculation, no filler.
   - Results should be measurable in terms of model metrics, stability, latency,
     code quality — not just "AUC improved."
+  - **Touch the data.** Every validation must load and analyze the actual dataset.
+    Compute descriptive statistics, correlations, target distribution, feature
+    distributions, train/test overlap. Code review is not a substitute for data
+    analysis. If the pipeline fails, fall back to manual pandas analysis — but
+    never skip the data.
 
 **Success metrics (all measurable, with graduated targets):**
   Early phase (< 20 bundles):

@@ -399,6 +399,13 @@ Explicit prohibitions (violation is a critical error):
   architecture, target formulation, data pipeline, and feature engineering qualitatively.
   A model that predicts the wrong target perfectly is not a good model. Question whether
   the target variable is correctly defined, not just whether the model predicts it well.
+- **Data is mandatory, not optional.** Every validation MUST include quantitative
+  analysis of the actual data — descriptive statistics, correlations, distribution
+  checks, metric computations. Code review alone is not validation — it is preliminary
+  assessment. Qualitative analysis identifies WHERE to look; quantitative analysis
+  proves whether the issue is REAL. A validation report without a single number
+  computed from the data is incomplete. If the data cannot be loaded or processed,
+  that itself is a critical finding — but the attempt must be made.
 - **No false positive alarms.** Every finding must be backed by quantitative evidence
   or clear code-level reasoning. "Might be a problem" is not a finding — it is noise.
   Track finding precision obsessively. A check with low precision is worse than no check.
