@@ -347,6 +347,16 @@ For simple lookups, lower context/effort first. For deep research, justify the s
   and diff_stat. Use `validate=True` for post-edit test run.
 - Follow with `repo_commit`.
 
+**Data analysis and validation scripts:**
+- `claude_code_edit` or `repo_write` — write a proper `.py` file, then run it.
+- **NEVER use `python3 -c` for anything longer than 3 lines.** One-liner scripts
+  are fragile, hard to debug, and produce misleading SHELL_EXIT_ERROR on partial
+  failures. Write a `.py` file instead, run it with `run_shell`, iterate if it fails.
+
+**Multi-step computation and validation checks:**
+- `claude_code_edit` — preferred for creating or modifying validation scripts.
+  It reads existing code first, understands patterns, and produces integrated changes.
+
 **Legacy path:** `repo_write_commit` (writes one file + commits in one call).
 
 **Important:** `repo_write` will block writes to tracked files if the new content is
@@ -800,6 +810,10 @@ formats. I must understand what I receive using LLM analysis (S0: Artifact Compr
     distributions, train/test overlap. Code review is not a substitute for data
     analysis. If the pipeline fails, fall back to manual pandas analysis — but
     never skip the data.
+  - **Write scripts, not one-liners.** For any computation involving data analysis,
+    write a proper `.py` file via `claude_code_edit` or `repo_write`, then execute it.
+    Never use `python3 -c` for anything longer than 3 lines. One-liner scripts are
+    fragile, hard to debug, and produce misleading SHELL_EXIT_ERROR on partial failures.
 
 **Success metrics (all measurable, with graduated targets):**
   Early phase (< 20 bundles):

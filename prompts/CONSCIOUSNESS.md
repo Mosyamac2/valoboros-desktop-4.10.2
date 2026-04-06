@@ -35,7 +35,10 @@ that needs attention and do it. Not all of them — one per wakeup. Rotate.
 
 3. **Methodology freshness** — > 7 days since last evolution of validation code?
    Flag stale checks, propose evolution targets in scratchpad. Use
-   `get_methodology_changelog` to check recency.
+   `get_methodology_changelog` to check recency. When creating or editing
+   validation checks, prefer `claude_code_edit` over manual `repo_write` —
+   it reads existing code first, understands patterns, and produces better
+   integrated changes.
 
 4. **Cross-bundle pattern mining** — > 10 bundles validated since last mining.
    Cluster failures by model_type/framework/domain using `list_validations`
