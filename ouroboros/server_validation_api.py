@@ -219,6 +219,56 @@ async def api_validation_report(request: Request) -> JSONResponse | PlainTextRes
 
 
 # ---------------------------------------------------------------------------
+# GET /api/validation/download
+# ---------------------------------------------------------------------------
+
+async def api_validation_download(request: Request) -> Response:
+    """Download a validation bundle as ZIP (inferred, methodology, inputs, results, log)."""
+    import io
+    from starlette.responses import StreamingResponse
+
+    try:
+        bundle_id = request.query_params.get("bundle_id", "")
+        if not bundle_id:
+            return JSONResponse({"error": "Missing bundle_id parameter."}, status_code=400)
+
+        validations_dir, _ = _get_paths()
+        bundle_dir = validations_dir / bundle_id
+        if not bundle_dir.exists():
+            return JSONResponse({"error": f"Bundle not found: {bundle_id}"}, status_code=404)
+
+        # Directories to include (skip raw/ — too large, and .sandbox_venv/)
+        include_dirs = ["inferred", "methodology", "inputs", "results", "improvement"]
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            # Include selected directories
+            for subdir in include_dirs:
+                subdir_path = bundle_dir / subdir
+                if subdir_path.exists():
+                    for f in sorted(subdir_path.rglob("*")):
+                        if f.is_file():
+                            arcname = f"{bundle_id}/{f.relative_to(bundle_dir)}"
+                            zf.write(f, arcname)
+            # Include validation.log at root level
+            log_file = bundle_dir / "validation.log"
+            if log_file.exists():
+                zf.write(log_file, f"{bundle_id}/validation.log")
+
+        buf.seek(0)
+        filename = f"validation_{bundle_id}.zip"
+        return StreamingResponse(
+            buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    except Exception as exc:
+        log.exception("Validation download failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
 # Route registration
 # ---------------------------------------------------------------------------
 
@@ -228,4 +278,5 @@ def validation_api_routes() -> list[Route]:
         Route("/api/validation/list", endpoint=api_validation_list),
         Route("/api/validation/run", endpoint=api_validation_run, methods=["POST"]),
         Route("/api/validation/report", endpoint=api_validation_report),
+        Route("/api/validation/download", endpoint=api_validation_download),
     ]

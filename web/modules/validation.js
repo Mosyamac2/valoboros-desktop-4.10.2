@@ -220,6 +220,15 @@ export function initValidation({ ws, state }) {
                     actionsCell.appendChild(runBtn);
                 }
 
+                // Download button — always available (downloads inferred, methodology, results, log)
+                const dlBtn = document.createElement('button');
+                dlBtn.className = 'btn-small';
+                dlBtn.textContent = 'Download';
+                dlBtn.addEventListener('click', () => {
+                    window.open(`/api/validation/download?bundle_id=${item.bundle_id}`, '_blank');
+                });
+                actionsCell.appendChild(dlBtn);
+
                 tbodyEl.appendChild(tr);
             }
         } catch (err) {
