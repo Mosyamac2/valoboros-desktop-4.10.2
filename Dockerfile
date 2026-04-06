@@ -14,6 +14,7 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     util-linux \
+    iproute2 \
     nodejs \
     npm \
     && npm install -g @anthropic-ai/claude-code \

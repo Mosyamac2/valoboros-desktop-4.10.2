@@ -6,6 +6,26 @@ set -e
 REPO_DIR="${OUROBOROS_REPO_DIR:-/repo}"
 APP_DIR="/app"
 
+# ── Proxy setup ──────────────────────────────────────────────────────
+# Resolve VALOBOROS_PROXY → HTTP_PROXY/HTTPS_PROXY inside the container.
+# Auto-fix 127.0.0.1 → container gateway IP (host as seen from container).
+if [ -n "${VALOBOROS_PROXY:-}" ]; then
+    PROXY_URL="$VALOBOROS_PROXY"
+    if echo "$PROXY_URL" | grep -q "127\.0\.0\.1"; then
+        # Get the default gateway (= host IP from container's perspective)
+        GATEWAY=$(ip route | awk '/default/ {print $3}' 2>/dev/null || echo "172.17.0.1")
+        PROXY_URL=$(echo "$PROXY_URL" | sed "s/127\.0\.0\.1/$GATEWAY/g")
+        echo "[entrypoint] Proxy 127.0.0.1 auto-fixed to $GATEWAY → $PROXY_URL"
+    fi
+    export HTTP_PROXY="$PROXY_URL"
+    export HTTPS_PROXY="$PROXY_URL"
+    echo "[entrypoint] Proxy set: $PROXY_URL"
+else
+    # No proxy — make sure stale host values don't leak in
+    unset HTTP_PROXY HTTPS_PROXY 2>/dev/null || true
+    echo "[entrypoint] No proxy configured"
+fi
+
 # Bootstrap: if repo is empty (no server.py), copy the full codebase from /app
 if [ ! -f "$REPO_DIR/server.py" ]; then
     echo "[entrypoint] Bootstrapping repo from app bundle..."

@@ -100,21 +100,24 @@ done
 # ── Proxy configuration ──────────────────────────────────────────────
 echo ""
 echo "=== Proxy (inside container) ==="
+valoboros_proxy=$(docker exec "$CONTAINER" printenv VALOBOROS_PROXY 2>/dev/null || echo "")
 http_proxy=$(docker exec "$CONTAINER" printenv HTTP_PROXY 2>/dev/null || echo "")
 https_proxy=$(docker exec "$CONTAINER" printenv HTTPS_PROXY 2>/dev/null || echo "")
 no_proxy=$(docker exec "$CONTAINER" printenv NO_PROXY 2>/dev/null || echo "")
 
+[ -n "$valoboros_proxy" ] && echo "  VALOBOROS_PROXY=$valoboros_proxy"
+
 if [ -n "$https_proxy" ]; then
     echo "  HTTPS_PROXY=$https_proxy"
     if echo "$https_proxy" | grep -q "127.0.0.1"; then
-        fail "HTTPS_PROXY uses 127.0.0.1 — unreachable from container! Use 172.17.0.1 or host IP"
+        fail "HTTPS_PROXY uses 127.0.0.1 — unreachable from container! Entrypoint should have fixed this"
     else
         ok "HTTPS_PROXY address looks correct"
     fi
 elif [ -n "$http_proxy" ]; then
     echo "  HTTP_PROXY=$http_proxy"
     if echo "$http_proxy" | grep -q "127.0.0.1"; then
-        fail "HTTP_PROXY uses 127.0.0.1 — unreachable from container! Use 172.17.0.1 or host IP"
+        fail "HTTP_PROXY uses 127.0.0.1 — unreachable from container! Entrypoint should have fixed this"
     else
         ok "HTTP_PROXY address looks correct"
     fi
