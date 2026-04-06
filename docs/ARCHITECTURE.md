@@ -915,7 +915,7 @@ and a dedicated web UI tab.
 | `reflection_engine.py` | Cross-validation pattern analysis: common failures, dead/hot checks, writes to knowledge base |
 | `literature_scanner.py` | Background arxiv scanning: 7 rotating queries, keyword heuristic, scan history |
 | `methodology_evolver.py` | Autonomous check creation/fix/deletion based on effectiveness data |
-| `watcher.py` | Folder watcher: scans inbox for new .zip files, tracks processed state, auto-ingests |
+| `watcher.py` | Folder watcher: scans inbox for new .zip files, tracks processed state, auto-ingests. `list_pending_bundles()` discovers uploaded-but-not-validated models for consciousness. |
 
 ### Seed Checks (`ouroboros/validation/checks/`)
 
@@ -943,16 +943,17 @@ and a dedicated web UI tab.
 
 ### Web UI (`web/modules/validation.js`)
 
-Dedicated Validation tab: drag-drop ZIP upload, task description, validation list with status badges, inline report viewer. Calls `/api/validation/*` endpoints.
+Dedicated Validation tab: drag-drop ZIP upload (creates pending bundle, does NOT auto-validate), task description, validation list with dynamic status badges (pending/validating/completed/failed/revalidating), Validate button per pending row, Retry for failed, inline report viewer, Download bundle ZIP. Polls `/api/validation/list` every 10 seconds for status updates.
 
 ### API Endpoints (`ouroboros/server_validation_api.py`)
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/validation/upload` | POST | Upload model ZIP + task, auto-ingest, return bundle_id |
-| `/api/validation/list` | GET | List bundles with status/verdict |
-| `/api/validation/run` | POST | Trigger validation pipeline for a bundle |
-| `/api/validation/report` | GET | Get report as JSON or Markdown |
+| `/api/validation/upload` | POST | Upload model ZIP + task, ingest as pending bundle (no auto-validation) |
+| `/api/validation/list` | GET | List bundles with status from `status.json` (pending/validating/completed/failed) |
+| `/api/validation/run` | POST | Start validation pipeline in background (`asyncio.create_task`), returns immediately |
+| `/api/validation/report` | GET | Get report as JSON or `?format=md` for Markdown |
+| `/api/validation/download` | GET | Download bundle as ZIP (inferred, methodology, results, log — excludes raw) |
 
 ### Pipeline Flow
 
@@ -990,6 +991,7 @@ validations/<bundle_id>/
   improvement/plan.json        # hard + soft recommendations
   improvement/implementation/  # modified model code
   improvement/revalidation/    # revalidation results
+  status.json                  # lifecycle: pending → validating → completed/failed
   validation.log               # timestamped execution trace
   .sandbox_venv/               # isolated Python environment
 ml-models-to-validate/         # inbox (resolved relative to DATA_DIR)

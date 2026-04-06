@@ -44,7 +44,8 @@ Most AI validation tools run a static checklist. Valoboros **creates its own che
 - **Validate → Improve → Revalidate Loop** — Side agent implements hard recommendations, re-runs validation, measures actual improvement lift. This is the ground truth for recommendation quality.
 - **Four-Tier Feedback** — Tier 0 (LLM self-assessment, weight 0.3), Tier 1 (improvement lift), Tier 2 (human expert, weight 1.0), Tier 3 (LLM cross-check). Finding quality and recommendation quality tracked independently.
 - **Graduated Evolution** — Early phase (< 20 bundles): evolve freely, experiment. Mature phase: require measurable metric improvement before committing methodology changes.
-- **Folder Watcher** — Monitors inbox folder for new model ZIPs, auto-ingests with processed tracking. Integrates with background consciousness.
+- **Decoupled Upload + Validate** — Upload creates a pending bundle; validation is triggered separately by user click, chat command, or consciousness discovery. Non-blocking: pipeline runs in background via `asyncio.create_task`. Explicit `status.json` per bundle tracks lifecycle: pending → validating → completed/failed.
+- **Folder Watcher** — Monitors inbox folder for new model ZIPs, auto-ingests with processed tracking. Discovers pending bundles for consciousness to validate.
 - **Cross-Validation Reflection** — Analyzes past validations to find patterns, detect dead/hot checks, and write insights to knowledge base.
 - **Background Literature Scanning** — Searches arxiv with 7 rotating queries between validations. Keyword-based relevance scoring at zero LLM cost. Complements per-model research.
 - **Methodology Evolution** — Automatically creates, fixes, or disables validation checks based on effectiveness data and arxiv findings.
@@ -165,9 +166,11 @@ Docker volume at `/data/validations/<bundle_id>/results/`.
 ### Upload via web UI
 
 Navigate to the **Validation** tab in the web UI to:
-- Drag-and-drop model ZIP files for validation
-- Add a task description
-- Monitor validation progress in real-time
+- Drag-and-drop model ZIP files (creates pending bundles — does NOT auto-validate)
+- Add a task description per model
+- Click **Validate** on any pending bundle to start the pipeline (runs in background)
+- Upload multiple models quickly, then validate selectively
+- Monitor validation progress in real-time (status polls every 10 seconds)
 - View validation reports in-browser
 
 ### View logs and reports
