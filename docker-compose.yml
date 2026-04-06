@@ -20,6 +20,10 @@ services:
       - OUROBOROS_VALIDATION_SANDBOX_MEM_MB=2048
       - OUROBOROS_FILE_BROWSER_DEFAULT=/data
       - TOTAL_BUDGET=${TOTAL_BUDGET:-50}
+      # Proxy (set in .env or leave blank if no proxy needed)
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1
 
     volumes:
       # Persistent data (survives container restarts and rebuilds)
