@@ -109,22 +109,36 @@ no_proxy=$(docker exec "$CONTAINER" printenv NO_PROXY 2>/dev/null || echo "")
 
 if [ -n "$https_proxy" ]; then
     echo "  HTTPS_PROXY=$https_proxy"
-    if echo "$https_proxy" | grep -q "127.0.0.1"; then
-        fail "HTTPS_PROXY uses 127.0.0.1 — unreachable from container! Entrypoint should have fixed this"
-    else
-        ok "HTTPS_PROXY address looks correct"
-    fi
+    ok "HTTPS_PROXY is set"
 elif [ -n "$http_proxy" ]; then
     echo "  HTTP_PROXY=$http_proxy"
-    if echo "$http_proxy" | grep -q "127.0.0.1"; then
-        fail "HTTP_PROXY uses 127.0.0.1 — unreachable from container! Entrypoint should have fixed this"
-    else
-        ok "HTTP_PROXY address looks correct"
-    fi
+    ok "HTTP_PROXY is set"
+elif [ -n "$valoboros_proxy" ]; then
+    warn "VALOBOROS_PROXY is set but HTTP_PROXY/HTTPS_PROXY not exported (check entrypoint)"
 else
     warn "No proxy configured (OK if direct internet access)"
 fi
 [ -n "$no_proxy" ] && echo "  NO_PROXY=$no_proxy"
+
+# Check proxy is reachable from inside container
+if [ -n "$valoboros_proxy" ]; then
+    proxy_host=$(echo "$valoboros_proxy" | sed -E 's|https?://||;s|:.*||')
+    proxy_port=$(echo "$valoboros_proxy" | sed -E 's|.*:([0-9]+).*|\1|')
+    proxy_check=$(docker exec "$CONTAINER" python3 -c "
+import socket
+try:
+    s = socket.create_connection(('$proxy_host', $proxy_port), timeout=3)
+    s.close()
+    print('OK')
+except Exception as e:
+    print('FAIL ' + str(e))
+" 2>&1)
+    if echo "$proxy_check" | grep -q "^OK"; then
+        ok "Proxy $proxy_host:$proxy_port is reachable from container"
+    else
+        fail "Proxy $proxy_host:$proxy_port unreachable from container: $proxy_check"
+    fi
+fi
 
 # ── DNS resolution ────────────────────────────────────────────────────
 echo ""

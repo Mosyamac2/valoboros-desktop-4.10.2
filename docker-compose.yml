@@ -4,8 +4,10 @@ services:
     container_name: valoboros
     restart: unless-stopped
 
-    ports:
-      - "8765:8765"
+    # Use host network so container can reach proxy on 127.0.0.1:10809.
+    # This means the container shares the host's network stack — no port
+    # mapping needed (server binds directly to host:8765).
+    network_mode: host
 
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
@@ -21,7 +23,7 @@ services:
       - OUROBOROS_FILE_BROWSER_DEFAULT=/data
       - TOTAL_BUDGET=${TOTAL_BUDGET:-50}
       # Proxy: use VALOBOROS_PROXY in .env to avoid collision with host env.
-      # The entrypoint auto-fixes 127.0.0.1 → container gateway IP.
+      # With network_mode:host, 127.0.0.1 works directly.
       - VALOBOROS_PROXY=${VALOBOROS_PROXY:-${HTTPS_PROXY:-${HTTP_PROXY:-}}}
       - NO_PROXY=localhost,127.0.0.1
 

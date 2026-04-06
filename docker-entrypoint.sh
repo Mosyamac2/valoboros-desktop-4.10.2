@@ -7,22 +7,18 @@ REPO_DIR="${OUROBOROS_REPO_DIR:-/repo}"
 APP_DIR="/app"
 
 # ── Proxy setup ──────────────────────────────────────────────────────
-# Resolve VALOBOROS_PROXY → HTTP_PROXY/HTTPS_PROXY inside the container.
-# Auto-fix 127.0.0.1 → container gateway IP (host as seen from container).
+# Resolve VALOBOROS_PROXY → HTTP_PROXY/HTTPS_PROXY for Python libraries.
+# With network_mode:host, 127.0.0.1 inside the container IS the host's
+# loopback, so no address rewriting is needed.
 if [ -n "${VALOBOROS_PROXY:-}" ]; then
-    PROXY_URL="$VALOBOROS_PROXY"
-    if echo "$PROXY_URL" | grep -q "127\.0\.0\.1"; then
-        # Get the default gateway (= host IP from container's perspective)
-        GATEWAY=$(ip route | awk '/default/ {print $3}' 2>/dev/null || echo "172.17.0.1")
-        PROXY_URL=$(echo "$PROXY_URL" | sed "s/127\.0\.0\.1/$GATEWAY/g")
-        echo "[entrypoint] Proxy 127.0.0.1 auto-fixed to $GATEWAY → $PROXY_URL"
-    fi
-    export HTTP_PROXY="$PROXY_URL"
-    export HTTPS_PROXY="$PROXY_URL"
-    echo "[entrypoint] Proxy set: $PROXY_URL"
+    export HTTP_PROXY="$VALOBOROS_PROXY"
+    export HTTPS_PROXY="$VALOBOROS_PROXY"
+    export http_proxy="$VALOBOROS_PROXY"
+    export https_proxy="$VALOBOROS_PROXY"
+    echo "[entrypoint] Proxy set: $VALOBOROS_PROXY"
 else
     # No proxy — make sure stale host values don't leak in
-    unset HTTP_PROXY HTTPS_PROXY 2>/dev/null || true
+    unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy 2>/dev/null || true
     echo "[entrypoint] No proxy configured"
 fi
 
