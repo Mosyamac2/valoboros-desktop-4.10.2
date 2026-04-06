@@ -234,7 +234,7 @@ class ValidationPipeline:
         try:
             from ouroboros.validation.model_researcher import ModelResearcher
             knowledge_dir = self._bundle_dir.parent.parent / "memory" / "knowledge"
-            researcher = ModelResearcher(profile, knowledge_dir, self._config)
+            researcher = ModelResearcher(profile, knowledge_dir, self._config, bundle_dir=self._bundle_dir)
             result = await researcher.research()
             # Save to bundle's methodology/ dir
             if result and (result.relevant_papers or result.risk_insights):

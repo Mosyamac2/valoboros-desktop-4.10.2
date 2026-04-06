@@ -27,7 +27,10 @@ from ouroboros.validation.types import (
 
 log = logging.getLogger(__name__)
 
-# Common English stopwords for keyword extraction
+# ---------------------------------------------------------------------------
+# Stopwords: English + generic ML terms that match everything on arxiv
+# ---------------------------------------------------------------------------
+
 _STOPWORDS = frozenset({
     "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for",
     "of", "with", "by", "from", "as", "is", "was", "are", "were", "be",
@@ -41,6 +44,48 @@ _STOPWORDS = frozenset({
     "because", "before", "between", "both", "each", "few", "more", "most",
     "other", "over", "same", "some", "such", "only", "own", "into", "up",
 })
+
+_ML_STOPWORDS = frozenset({
+    "predict", "prediction", "model", "models", "rate", "data", "dataset",
+    "analysis", "method", "approach", "system", "based", "using", "learning",
+    "machine", "algorithm", "training", "train", "test", "feature", "features",
+    "performance", "accuracy", "result", "results", "study", "paper",
+    "proposed", "novel", "new", "improved", "framework", "detection",
+    "classification", "regression", "deep", "neural", "network",
+})
+
+# ---------------------------------------------------------------------------
+# Domain → arxiv category mapping
+# ---------------------------------------------------------------------------
+
+_DOMAIN_TO_CATEGORIES: dict[str, str] = {
+    "credit": "cat:q-fin.RM OR cat:q-fin.ST OR cat:cs.CE",
+    "loan": "cat:q-fin.RM OR cat:q-fin.ST OR cat:cs.CE",
+    "mortgage": "cat:q-fin.RM OR cat:q-fin.ST",
+    "prepayment": "cat:q-fin.RM OR cat:q-fin.ST",
+    "repayment": "cat:q-fin.RM OR cat:q-fin.ST",
+    "default": "cat:q-fin.RM OR cat:q-fin.ST",
+    "scoring": "cat:q-fin.RM OR cat:q-fin.ST OR cat:cs.LG",
+    "fraud": "cat:q-fin.RM OR cat:cs.CR OR cat:cs.LG",
+    "insurance": "cat:q-fin.RM OR cat:stat.AP",
+    "risk": "cat:q-fin.RM OR cat:stat.ML",
+    "churn": "cat:cs.LG OR cat:stat.ML",
+    "medical": "cat:cs.LG OR cat:q-bio.QM",
+    "clinical": "cat:cs.LG OR cat:q-bio.QM",
+    "health": "cat:cs.LG OR cat:q-bio.QM",
+    "image": "cat:cs.CV",
+    "vision": "cat:cs.CV",
+    "text": "cat:cs.CL",
+    "nlp": "cat:cs.CL",
+    "language": "cat:cs.CL",
+    "speech": "cat:cs.SD OR cat:cs.CL",
+    "timeseries": "cat:stat.ML OR cat:cs.LG",
+    "forecast": "cat:stat.ML OR cat:cs.LG",
+    "recommender": "cat:cs.IR OR cat:cs.LG",
+}
+_DEFAULT_CATEGORIES = "cat:cs.LG OR cat:stat.ML"
+
+_MIN_RELEVANCE = 0.3
 
 _SYNTHESIS_PROMPT = """\
 You are preparing to validate a {model_type} model ({algorithm}, {framework})
@@ -74,10 +119,12 @@ class ModelResearcher:
         profile: ModelProfile,
         knowledge_dir: Path,
         config: ValidationConfig,
+        bundle_dir: Optional[Path] = None,
     ) -> None:
         self._profile = profile
         self._knowledge_dir = Path(knowledge_dir)
         self._config = config
+        self._bundle_dir = Path(bundle_dir) if bundle_dir else None
 
     # ------------------------------------------------------------------
     # Public API
@@ -99,6 +146,8 @@ class ModelResearcher:
         queries = self._generate_queries(self._profile)
         log.info("Per-model research: %d queries for %s/%s",
                  len(queries), self._profile.framework, self._profile.algorithm)
+        for i, q in enumerate(queries):
+            log.info("  Query %d: %s", i + 1, q)
 
         # Search arxiv
         all_papers: dict[str, dict] = {}  # deduplicate by id
@@ -109,7 +158,7 @@ class ModelResearcher:
                     if p["id"] not in all_papers:
                         all_papers[p["id"]] = p
             except Exception as exc:
-                log.warning("Arxiv query failed (%s): %s", query[:50], exc)
+                log.warning("Arxiv query failed (%s): %s", query[:80], exc)
 
         if not all_papers:
             return ModelResearchResult(queries_used=queries, papers_found=0)
@@ -121,11 +170,11 @@ class ModelResearcher:
             scored.append((score, paper))
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        # Keep top N relevant papers
+        # Keep top N relevant papers (minimum relevance: 0.3)
         top_papers: list[PaperSummary] = []
         for score, paper in scored[:self._config.research_max_papers]:
-            if score < 0.1:
-                break  # below minimum relevance
+            if score < _MIN_RELEVANCE:
+                break
             top_papers.append(PaperSummary(
                 arxiv_id=paper["id"],
                 title=paper["title"],
@@ -153,6 +202,9 @@ class ModelResearcher:
             except Exception as exc:
                 log.warning("LLM synthesis failed, using heuristic: %s", exc)
                 risk_insights = self._heuristic_risks()
+        else:
+            # No relevant papers — still provide heuristic risks
+            risk_insights = self._heuristic_risks()
 
         result = ModelResearchResult(
             queries_used=queries,
@@ -177,44 +229,90 @@ class ModelResearcher:
     def _generate_queries(self, profile: ModelProfile) -> list[str]:
         """Build 2-3 arxiv queries specific to this model."""
         queries: list[str] = []
+        categories = self._detect_categories(profile)
 
-        # Query 1: Algorithm/framework + validation
-        queries.append(
-            f"cat:cs.LG AND ({profile.algorithm} OR {profile.framework}) "
-            f"AND (validation OR testing OR evaluation)"
-        )
+        # Gather all available text for keyword extraction
+        rich_text = profile.task_description
+        if self._bundle_dir:
+            for fname in ["inputs/task.txt", "inputs/data_description.txt"]:
+                p = self._bundle_dir / fname
+                if p.exists():
+                    try:
+                        rich_text += " " + p.read_text(encoding="utf-8")[:2000]
+                    except Exception:
+                        pass
 
-        # Query 2: Task domain keywords + model risk
-        task_keywords = self._extract_domain_keywords(profile.task_description)
-        if task_keywords:
-            kw_str = " OR ".join(task_keywords[:3])
+        domain_keywords = self._extract_domain_keywords(rich_text)
+        bigrams = self._extract_bigrams(rich_text)
+
+        # Query 1: Algorithm + domain bigrams (most specific)
+        if bigrams:
             queries.append(
-                f"cat:cs.LG AND ({kw_str}) AND (model risk OR validation)"
+                f"({categories}) AND ({profile.algorithm} OR {profile.framework}) "
+                f"AND ({' OR '.join(bigrams[:2])})"
+            )
+        else:
+            queries.append(
+                f"({categories}) AND ({profile.algorithm} OR {profile.framework}) "
+                f"AND (validation OR evaluation)"
+            )
+
+        # Query 2: Domain keywords + risk/validation
+        if domain_keywords:
+            kw_str = " OR ".join(domain_keywords[:3])
+            queries.append(
+                f"({categories}) AND ({kw_str}) AND (validation OR risk OR evaluation)"
             )
 
         # Query 3: Risk-specific
         if profile.temporal_column:
-            queries.append("cat:cs.LG AND (temporal leakage OR time series validation)")
+            queries.append(f"({categories}) AND (temporal leakage OR time series split OR temporal validation)")
         elif profile.protected_attributes_candidates:
-            queries.append("cat:cs.LG AND (fairness ML OR bias detection)")
+            queries.append(f"({categories}) AND (fairness OR bias detection OR disparate impact)")
         else:
             queries.append(
-                f"cat:cs.LG AND {profile.model_type} AND (overfitting OR data leakage)"
+                f"({categories}) AND ({profile.framework}) AND (model validation OR model risk)"
             )
 
         return queries[:self._config.research_max_queries]
 
+    def _detect_categories(self, profile: ModelProfile) -> str:
+        """Map model domain to arxiv categories based on task description."""
+        text = (profile.task_description + " " + profile.model_type).lower()
+        for keyword, categories in _DOMAIN_TO_CATEGORIES.items():
+            if keyword in text:
+                return categories
+        return _DEFAULT_CATEGORIES
+
     def _extract_domain_keywords(self, text: str) -> list[str]:
-        """Extract domain keywords from text, removing stopwords."""
+        """Extract domain-specific keywords, removing both English and ML stopwords."""
         words = text.lower().split()
-        # Remove stopwords, short words, and non-alpha
         keywords = [
             w for w in words
-            if w not in _STOPWORDS and len(w) >= 3 and w.isalpha()
+            if w not in _STOPWORDS and w not in _ML_STOPWORDS
+            and len(w) >= 3 and w.isalpha()
         ]
-        # Sort by length descending (longer = more specific)
-        keywords = sorted(set(keywords), key=len, reverse=True)
-        return keywords[:5]
+        return sorted(set(keywords), key=len, reverse=True)[:5]
+
+    def _extract_bigrams(self, text: str) -> list[str]:
+        """Extract meaningful 2-word phrases for more specific arxiv queries."""
+        words = text.lower().split()
+        bigrams: list[str] = []
+        for i in range(len(words) - 1):
+            a, b = words[i], words[i + 1]
+            if (a not in _STOPWORDS and b not in _STOPWORDS
+                    and a not in _ML_STOPWORDS and b not in _ML_STOPWORDS
+                    and len(a) >= 3 and len(b) >= 3
+                    and a.isalpha() and b.isalpha()):
+                bigrams.append(f'"{a} {b}"')  # quoted for exact phrase match
+        # Deduplicate preserving order
+        seen: set[str] = set()
+        unique: list[str] = []
+        for bg in bigrams:
+            if bg not in seen:
+                seen.add(bg)
+                unique.append(bg)
+        return unique[:5]
 
     # ------------------------------------------------------------------
     # Arxiv search
@@ -227,7 +325,7 @@ class ModelResearcher:
         search = arxiv.Search(
             query=query,
             max_results=max_results,
-            sort_by=arxiv.SortCriterion.SubmittedDate,
+            sort_by=arxiv.SortCriterion.Relevance,  # sort by relevance, not date
         )
         results = []
         for paper in arxiv.Client().results(search):
@@ -262,8 +360,17 @@ class ModelResearcher:
         if profile.model_type.lower() in text:
             score += 0.2
 
-        # Task domain keywords
-        for kw in self._extract_domain_keywords(profile.task_description):
+        # Task domain keywords (extracted with ML stopwords removed)
+        rich_text = profile.task_description
+        if self._bundle_dir:
+            for fname in ["inputs/task.txt"]:
+                p = self._bundle_dir / fname
+                if p.exists():
+                    try:
+                        rich_text += " " + p.read_text(encoding="utf-8")[:500]
+                    except Exception:
+                        pass
+        for kw in self._extract_domain_keywords(rich_text):
             if kw in text:
                 score += 0.2
 
@@ -295,7 +402,6 @@ class ModelResearcher:
         filename = f"model_type_{profile.model_type}.md"
         path = self._knowledge_dir / filename
 
-        # Build the new section
         date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         lines: list[str] = [
             f"\n## Research for {profile.algorithm} ({date_str})\n",
@@ -313,11 +419,13 @@ class ModelResearcher:
             for p in result.relevant_papers:
                 lines.append(f"- [{p.relevance_score:.1f}] {p.title}")
                 lines.append(f"  {p.url}")
+        if not result.relevant_papers:
+            lines.append("\n*No sufficiently relevant papers found (min score: 0.3).*")
+        lines.append(f"\nQueries used: {result.queries_used}")
         lines.append("")
 
         new_section = "\n".join(lines)
 
-        # Append to existing file
         if path.exists():
             existing = path.read_text(encoding="utf-8")
             path.write_text(existing + new_section, encoding="utf-8")

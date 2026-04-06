@@ -49,15 +49,51 @@ def test_generate_queries_uses_task_keywords(knowledge_dir):
 
 
 def test_extract_domain_keywords():
-    """Extracts meaningful keywords, removes stopwords."""
+    """Extracts meaningful keywords, removes stopwords and ML stopwords."""
     researcher = ModelResearcher.__new__(ModelResearcher)
+    researcher._bundle_dir = None
     keywords = researcher._extract_domain_keywords(
         "Predict early repayment rate for consumer loans in banking"
     )
     assert len(keywords) >= 2
     assert "for" not in keywords
     assert "in" not in keywords
-    assert any(kw in keywords for kw in ["repayment", "consumer", "banking", "loans", "predict"])
+    assert "predict" not in keywords  # ML stopword
+    assert "rate" not in keywords     # ML stopword
+    assert any(kw in keywords for kw in ["repayment", "consumer", "banking", "loans", "early"])
+
+
+def test_extract_bigrams():
+    """Extracts meaningful bigrams from text."""
+    researcher = ModelResearcher.__new__(ModelResearcher)
+    researcher._bundle_dir = None
+    bigrams = researcher._extract_bigrams(
+        "Predict early repayment rate for consumer loans in banking sector"
+    )
+    assert len(bigrams) >= 1
+    # Should contain quoted phrases like '"early repayment"' or '"consumer loans"'
+    combined = " ".join(bigrams)
+    assert "early repayment" in combined or "consumer loans" in combined
+
+
+def test_detect_categories_credit(knowledge_dir, profile):
+    """Credit/loan model maps to q-fin categories."""
+    researcher = ModelResearcher(profile, knowledge_dir, ValidationConfig())
+    cats = researcher._detect_categories(profile)
+    assert "q-fin" in cats  # should be quantitative finance, not just cs.LG
+
+
+def test_detect_categories_default(knowledge_dir):
+    """Unknown domain falls back to cs.LG."""
+    profile = ModelProfile(
+        bundle_id="test", task_description="Some generic task",
+        model_type="other", model_type_confidence=0.5,
+        framework="sklearn", framework_confidence=0.9,
+        algorithm="SomeAlgo", data_format="tabular",
+    )
+    researcher = ModelResearcher(profile, knowledge_dir, ValidationConfig())
+    cats = researcher._detect_categories(profile)
+    assert "cs.LG" in cats
 
 
 def test_score_relevance_high_for_matching_paper(knowledge_dir, profile):
