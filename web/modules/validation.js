@@ -31,7 +31,7 @@ export function initValidation({ ws, state }) {
                 <textarea id="val-task" rows="3"
                     placeholder="Describe what this model does (e.g., 'Predict early repayment rate for consumer loans')"></textarea>
                 <div class="upload-actions">
-                    <button id="val-upload-btn" class="btn-primary" disabled>Upload &amp; Validate</button>
+                    <button id="val-upload-btn" class="btn-primary" disabled>Upload</button>
                     <span id="val-upload-status"></span>
                 </div>
             </section>
@@ -131,8 +131,8 @@ export function initValidation({ ws, state }) {
             const resp = await fetch('/api/validation/upload', { method: 'POST', body: form });
             const data = await resp.json();
             if (data.ok) {
-                uploadStatus.textContent = `Uploaded! Bundle: ${data.bundle_id} — click Validate when ready.`;
-                uploadStatus.className = 'status-completed';
+                uploadStatus.textContent = `Uploaded! Bundle: ${data.bundle_id} — click Validate to start.`;
+                uploadStatus.className = '';
                 selectedFile = null;
                 fileInput.value = '';
                 taskInput.value = '';
