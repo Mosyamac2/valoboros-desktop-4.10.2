@@ -10,11 +10,14 @@ RUN pip install --no-cache-dir --prefix=/install \
 # --- Runtime stage ---
 FROM python:3.12-slim
 
-# System deps for sandbox (unshare) and git
+# System deps for sandbox (unshare), git, and Node.js (for Claude Code CLI)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     util-linux \
-    && rm -rf /var/lib/apt/lists/*
+    nodejs \
+    npm \
+    && npm install -g @anthropic-ai/claude-code \
+    && rm -rf /var/lib/apt/lists/* /root/.npm
 
 # Create non-root user
 RUN useradd -m -u 1000 valoboros
