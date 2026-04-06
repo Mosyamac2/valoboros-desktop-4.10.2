@@ -57,6 +57,10 @@ IMPORTANT:
   model metrics, stability, inference latency, code quality, or any other
   concrete dimension. "Consider improving" is not a recommendation.
 - Each recommendation should be specific enough that a developer can implement it.
+- If NO quantitative checks ran (all findings are from code review only),
+  explicitly state in the FIRST recommendation: "WARNING: This validation is
+  based on code review only. No quantitative analysis was performed on the data.
+  Findings should be considered preliminary until confirmed with data analysis."
 
 Return a JSON array of these objects. Return ONLY the JSON array, no explanation.
 If there are no failed checks, return an empty array: []

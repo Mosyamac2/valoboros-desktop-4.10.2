@@ -41,7 +41,7 @@ def _run_self_assessment(ctx: ToolContext, bundle_id: str) -> str:
     config = load_validation_config()
     tracker = _get_tracker(ctx)
 
-    assessments = asyncio.get_event_loop().run_until_complete(
+    assessments = asyncio.run(
         run_self_assessment(ctx.drive_root / "validations" / bundle_id, report, config, tracker)
     )
     return f"Self-assessed {len(assessments)} findings for bundle {bundle_id}."

@@ -25,7 +25,7 @@ def _run_validation(ctx: ToolContext, bundle_id: str, stages: str = "all") -> st
     if not bundle_dir.exists():
         return f"Bundle not found: {bundle_id}"
     pipeline = ValidationPipeline(bundle_id, bundle_dir, ctx.repo_dir, config)
-    report = asyncio.get_event_loop().run_until_complete(pipeline.run())
+    report = asyncio.run(pipeline.run())
     return f"Validation complete. Verdict: {report.overall_verdict}. " \
            f"Stages: {len(report.stages)}, critical findings: {len(report.critical_findings)}."
 
@@ -38,7 +38,7 @@ def _run_validation_stage(ctx: ToolContext, bundle_id: str, stage: str) -> str:
     if not bundle_dir.exists():
         return f"Bundle not found: {bundle_id}"
     pipeline = ValidationPipeline(bundle_id, bundle_dir, ctx.repo_dir, config)
-    result = asyncio.get_event_loop().run_until_complete(pipeline.run_single_stage(stage))
+    result = asyncio.run(pipeline.run_single_stage(stage))
     return json.dumps(result.to_dict(), indent=2, ensure_ascii=False)
 
 
@@ -155,7 +155,7 @@ def _run_improvement_cycle(ctx: ToolContext, bundle_id: str) -> str:
 
     # Step 1: Implement recommendations
     improver = ModelImprover(bundle_dir, hard_recs, sandbox, config)
-    impl_result = asyncio.get_event_loop().run_until_complete(improver.implement())
+    impl_result = asyncio.run(improver.implement())
 
     if not impl_result.recommendations_applied:
         skipped_summary = "; ".join(f"{c}: {r}" for c, r in impl_result.recommendations_skipped)
@@ -173,7 +173,7 @@ def _run_improvement_cycle(ctx: ToolContext, bundle_id: str) -> str:
 
     # Step 3: Revalidate
     reval = RevalidationPipeline(bundle_id, bundle_dir, ctx.repo_dir, config)
-    reval_result = asyncio.get_event_loop().run_until_complete(
+    reval_result = asyncio.run(
         reval.run(original_metrics, impl_result.recommendations_applied,
                   impl_result.recommendations_skipped)
     )
