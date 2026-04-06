@@ -63,8 +63,27 @@ class ValidationPipeline:
         total = len(result.checks)
         self._log(f"{result.stage} ({result.stage_name}) {result.status}: {total} checks, {failed} failed, {result.duration_sec:.1f}s")
 
+    def _update_status(self, status: str, verdict: str = None, error: str = None) -> None:
+        """Write status.json to track pipeline lifecycle."""
+        from datetime import datetime, timezone
+        status_file = self._bundle_dir / "status.json"
+        data: dict = {}
+        if status_file.exists():
+            try:
+                data = json.loads(status_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        data["status"] = status
+        data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        if verdict is not None:
+            data["verdict"] = verdict
+        if error is not None:
+            data["error"] = error
+        status_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
     async def run(self) -> ValidationReport:
         """Execute the full validation pipeline."""
+        self._update_status("validating")
         stages: list[ValidationStageResult] = []
         self._log(f"Starting validation pipeline for bundle {self._bundle_id}")
 
@@ -199,6 +218,7 @@ class ValidationPipeline:
                 self._log(f"Self-assessment failed: {exc}")
                 log.warning("Self-assessment failed: %s", exc)
 
+        self._update_status("completed", verdict=report.overall_verdict)
         self._log("Pipeline complete.")
         return report
 

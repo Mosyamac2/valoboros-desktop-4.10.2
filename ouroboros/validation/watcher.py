@@ -61,6 +61,24 @@ class ValidationWatcher:
     # Scanning
     # ------------------------------------------------------------------
 
+    def list_pending_bundles(self) -> list[str]:
+        """Return bundle_ids with status 'pending' (uploaded but not yet validated)."""
+        pending: list[str] = []
+        if not self._validations_dir.exists():
+            return pending
+        for entry in sorted(self._validations_dir.iterdir()):
+            if not entry.is_dir():
+                continue
+            status_file = entry / "status.json"
+            if status_file.exists():
+                try:
+                    data = json.loads(status_file.read_text(encoding="utf-8"))
+                    if data.get("status") == "pending":
+                        pending.append(entry.name)
+                except Exception:
+                    pass
+        return pending
+
     def scan_inbox(self) -> list[Path]:
         """Return list of new .zip files not yet in the processed tracking file."""
         if not self._inbox_dir.exists():

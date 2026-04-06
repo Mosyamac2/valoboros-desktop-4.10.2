@@ -2050,6 +2050,7 @@ body {
 .status-validating { background: rgba(100, 160, 255, 0.2); color: #7ab8f0; }
 .status-completed { background: rgba(100, 240, 160, 0.15); color: #7af0a0; }
 .status-failed, .status-error { background: rgba(240, 100, 100, 0.15); color: #f07a86; }
+.status-revalidating { background: rgba(160, 100, 255, 0.2); color: #b08af0; }
 
 .verdict-approved { color: #7af0a0; font-weight: 600; }
 .verdict-conditional { color: #f0d07a; font-weight: 600; }

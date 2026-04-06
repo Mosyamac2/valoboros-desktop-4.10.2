@@ -62,6 +62,16 @@ def _ingest_model_artifacts_impl(
             data_description, encoding="utf-8",
         )
 
+    # Write initial status
+    from datetime import datetime, timezone
+    (bundle_dir / "status.json").write_text(json.dumps({
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "verdict": None,
+        "error": None,
+    }, indent=2), encoding="utf-8")
+
     return bundle_id
 
 
@@ -75,21 +85,30 @@ def _list_validations_impl(validations_dir: Path, status: str = "all") -> str:
         if not entry.is_dir():
             continue
         bundle_id = entry.name
-        report_path = entry / "results" / "report.json"
-        if report_path.exists():
+        # Read explicit status.json if available, fall back to heuristic
+        status_file = entry / "status.json"
+        if status_file.exists():
             try:
-                report = json.loads(report_path.read_text(encoding="utf-8"))
-                bundle_status = "completed"
-                verdict = report.get("overall_verdict", "?")
+                status_data = json.loads(status_file.read_text(encoding="utf-8"))
+                bundle_status = status_data.get("status", "pending")
+                verdict = status_data.get("verdict") or "-"
             except Exception:
-                bundle_status = "error"
-                verdict = "?"
-        elif (entry / "inferred" / "model_profile.json").exists():
-            bundle_status = "validating"
-            verdict = "-"
+                bundle_status = "pending"
+                verdict = "-"
         else:
-            bundle_status = "pending"
-            verdict = "-"
+            # Legacy bundles without status.json
+            report_path = entry / "results" / "report.json"
+            if report_path.exists():
+                try:
+                    report = json.loads(report_path.read_text(encoding="utf-8"))
+                    bundle_status = "completed"
+                    verdict = report.get("overall_verdict", "?")
+                except Exception:
+                    bundle_status = "error"
+                    verdict = "?"
+            else:
+                bundle_status = "pending"
+                verdict = "-"
 
         if status != "all" and bundle_status != status:
             continue

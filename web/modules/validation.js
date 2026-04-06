@@ -131,32 +131,11 @@ export function initValidation({ ws, state }) {
             const resp = await fetch('/api/validation/upload', { method: 'POST', body: form });
             const data = await resp.json();
             if (data.ok) {
-                uploadStatus.textContent = `Uploaded! Starting validation...`;
-                uploadStatus.className = 'status-validating';
+                uploadStatus.textContent = `Uploaded! Bundle: ${data.bundle_id} — click Validate when ready.`;
+                uploadStatus.className = 'status-completed';
                 selectedFile = null;
                 fileInput.value = '';
                 taskInput.value = '';
-                refreshList();
-
-                // Trigger validation pipeline automatically
-                try {
-                    const runResp = await fetch('/api/validation/run', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ bundle_id: data.bundle_id }),
-                    });
-                    const runData = await runResp.json();
-                    if (runData.ok) {
-                        uploadStatus.textContent = `Validation complete: ${runData.verdict || 'done'}`;
-                        uploadStatus.className = 'status-completed';
-                    } else {
-                        uploadStatus.textContent = `Validation error: ${runData.error || 'unknown'}`;
-                        uploadStatus.className = 'status-error';
-                    }
-                } catch (runErr) {
-                    uploadStatus.textContent = `Upload OK, but validation failed to start: ${runErr.message}`;
-                    uploadStatus.className = 'status-error';
-                }
                 uploadBtn.disabled = false;
                 refreshList();
             } else {
@@ -218,6 +197,17 @@ export function initValidation({ ws, state }) {
                     runBtn.textContent = 'Validate';
                     runBtn.addEventListener('click', () => runValidation(item.bundle_id, runBtn));
                     actionsCell.appendChild(runBtn);
+                } else if (item.status === 'validating' || item.status === 'revalidating') {
+                    const spinner = document.createElement('span');
+                    spinner.className = 'status-validating';
+                    spinner.textContent = 'Running...';
+                    actionsCell.appendChild(spinner);
+                } else if (item.status === 'failed') {
+                    const retryBtn = document.createElement('button');
+                    retryBtn.className = 'btn-small btn-primary';
+                    retryBtn.textContent = 'Retry';
+                    retryBtn.addEventListener('click', () => runValidation(item.bundle_id, retryBtn));
+                    actionsCell.appendChild(retryBtn);
                 }
 
                 // Download button — always available (downloads inferred, methodology, results, log)

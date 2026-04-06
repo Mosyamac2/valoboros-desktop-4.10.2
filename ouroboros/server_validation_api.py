@@ -146,7 +146,7 @@ async def api_validation_list(request: Request) -> JSONResponse:
 # ---------------------------------------------------------------------------
 
 async def api_validation_run(request: Request) -> JSONResponse:
-    """Trigger validation for a bundle."""
+    """Trigger validation for a bundle (non-blocking — runs in background)."""
     try:
         body = await request.json()
         bundle_id = body.get("bundle_id", "")
@@ -158,27 +158,49 @@ async def api_validation_run(request: Request) -> JSONResponse:
         if not bundle_dir.exists():
             return JSONResponse({"error": f"Bundle not found: {bundle_id}"}, status_code=404)
 
+        import asyncio
+
+        # Start pipeline in background — return immediately
+        asyncio.create_task(_run_pipeline_background(bundle_id, bundle_dir))
+
+        return JSONResponse({
+            "ok": True,
+            "bundle_id": bundle_id,
+            "status": "validating",
+        })
+
+    except Exception as exc:
+        log.exception("Validation run failed")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+async def _run_pipeline_background(bundle_id: str, bundle_dir: Path) -> None:
+    """Run the validation pipeline as a background task."""
+    try:
         from ouroboros.config import REPO_DIR
         from ouroboros.validation.config_loader import load_validation_config
         from ouroboros.validation.pipeline import ValidationPipeline
 
         config = load_validation_config()
         pipeline = ValidationPipeline(bundle_id, bundle_dir, REPO_DIR, config)
-        report = await pipeline.run()
-
-        return JSONResponse({
-            "ok": True,
-            "bundle_id": bundle_id,
-            "status": "completed",
-            "verdict": report.overall_verdict,
-            "critical_findings": len(report.critical_findings),
-            "hard_recommendations": len(report.hard_recommendations),
-            "soft_recommendations": len(report.soft_recommendations),
-        })
-
+        await pipeline.run()
+        # Status updated to "completed" by pipeline._update_status()
     except Exception as exc:
-        log.exception("Validation run failed")
-        return JSONResponse({"error": str(exc)}, status_code=500)
+        log.exception("Background validation failed for %s", bundle_id)
+        # Write failed status
+        try:
+            status_file = bundle_dir / "status.json"
+            data = {}
+            if status_file.exists():
+                data = json.loads(status_file.read_text(encoding="utf-8"))
+            data["status"] = "failed"
+            data["error"] = str(exc)
+            from datetime import datetime, timezone
+            data["updated_at"] = datetime.now(timezone.utc).isoformat()
+            status_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
