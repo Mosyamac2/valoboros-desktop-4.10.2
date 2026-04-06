@@ -762,7 +762,7 @@ def build_llm_messages(
     bible_md = safe_read(env.repo_path("BIBLE.md"))
     arch_md = safe_read(env.repo_path("docs/ARCHITECTURE.md"))
     dev_guide_md = safe_read(env.repo_path("docs/DEVELOPMENT.md"))
-    readme_md = safe_read(env.repo_path("README.md"))
+    # README.md removed from context — available via repo_read if needed
     checklists_md = safe_read(env.repo_path("docs/CHECKLISTS.md"))
     state_json = safe_read(env.drive_path("state/state.json"), fallback="{}")
 
@@ -772,13 +772,13 @@ def build_llm_messages(
         base_prompt + "\n\n"
         + "## BIBLE.md\n\n" + bible_md
     )
-    if arch_md.strip():
+    # ARCHITECTURE.md — only for evolution (agent needs body map when self-modifying)
+    if arch_md.strip() and task_type == "evolution":
         static_text += "\n\n## ARCHITECTURE.md\n\n" + arch_md
     if dev_guide_md.strip():
         static_text += "\n\n## DEVELOPMENT.md\n\n" + dev_guide_md
-    if readme_md.strip():
-        static_text += "\n\n## README.md\n\n" + readme_md
-    if checklists_md.strip():
+    # CHECKLISTS.md — only for evolution and review tasks
+    if checklists_md.strip() and task_type in ("evolution", "review"):
         static_text += "\n\n## CHECKLISTS.md\n\n" + checklists_md
 
     semi_stable_parts = []
