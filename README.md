@@ -36,8 +36,8 @@ Most AI validation tools run a static checklist. Valoboros **creates its own che
 
 - **LLM-Powered Artifact Comprehension** — Receives raw ZIPs of .py/.ipynb files and data samples. No manifests, no standard format required. The LLM analyzes the code to infer model type, framework, target variable, features, preprocessing, and dependencies.
 - **Deterministic Dependency Extraction** — AST-based scanner extracts all imports from code before the LLM call. Maps import names to pip packages (e.g., `sklearn` → `scikit-learn`). Auto-installs into sandbox before execution.
-- **Per-Model Literature Research** — Before validation, searches arxiv with queries dynamically generated from the model profile (algorithm, framework, task domain, detected risks). Scores relevance against THIS model. LLM synthesizes risk insights for the methodology planner. Separate from background scanning.
-- **Per-Model Methodology Planning** — LLM designs a custom validation plan for each model: which checks to run, which to skip, which to create, risk priorities. Uses knowledge base + per-model research. Falls back to heuristic selection if LLM is unavailable.
+- **Per-Model Literature Research** — Before validation, searches arxiv with queries dynamically generated from the model profile. Uses domain-to-arxiv-category mapping (e.g., credit models → `q-fin.RM`, NLP → `cs.CL`), bigram extraction for precise queries ("early repayment" not just "repayment"), ML-specific stopword filtering, and relevance-ranked results. LLM synthesizes risk insights for the methodology planner.
+- **Per-Model Methodology Planning** — LLM designs a custom validation plan with qualitative (architecture, target formulation, data pipeline) and quantitative (metrics, sensitivity, stability) blocks. Selects checks, skips irrelevant ones, proposes new checks. Uses knowledge base + per-model research. Falls back to heuristic selection if LLM is unavailable.
 - **10-Stage Validation Pipeline** — S0 (comprehension) → S1 (reproducibility) → S2 (OOS performance) → S3 (overfit/underfit) → S4 (data leakage) → S5 (bias/fairness) → S6 (feature sensitivity) → S7 (robustness) → S8 (code quality) → S9 (synthesis + improvement plan).
 - **Dynamic Check Registry** — Validation checks are individual `.py` files the agent can create, edit, disable, and delete. 9 seed checks + unlimited agent-created checks.
 - **Hard & Soft Recommendations** — Hard recs are specific, implementable code changes with estimated metric impact. Soft recs are genuine observations that require human action (e.g., "collect more data"). Both have value; neither pollutes the other's metrics.
@@ -316,7 +316,7 @@ Ouroboros (Valoboros)
 │       └── validation_feedback.py — feedback and effectiveness tools
 ├── supervisor/              — Process management, queue, state, workers
 ├── prompts/                 — SYSTEM.md, SAFETY.md, CONSCIOUSNESS.md
-├── ml-models-to-validate/   — Drop model ZIPs here for validation
+├── docker-entrypoint.sh     — Bootstraps /repo from /app on first Docker start
 └── aux_notes/               — Plans and reference documentation
 ```
 
@@ -458,7 +458,7 @@ The same runtime actions are also exposed as compact buttons in the Chat header.
 
 ## Philosophy (BIBLE.md v5.0)
 
-**Mission:** Become an ever more proficient ML model validation expert. Detect real problems (no false alarms). Provide recommendations that matter (specific, feasible, measurable). Continuously grow expertise from every validation.
+**Mission:** Become an ever more proficient ML model validation expert. Detect real problems (no false alarms). Provide recommendations that matter (specific, feasible, measurable). Continuously grow expertise from every validation. Data is mandatory — code review alone is not validation.
 
 | # | Principle | Core Idea |
 |---|-----------|-----------|

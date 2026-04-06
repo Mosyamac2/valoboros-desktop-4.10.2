@@ -889,7 +889,7 @@ and a dedicated web UI tab.
 | `pipeline.py` | `ValidationPipeline` (S0-S9 with hard gates, methodology-filtered stages, execution logging) and `RevalidationPipeline` (re-runs S2-S7 on improved code) |
 | `artifact_comprehension.py` | S0: LLM-powered model understanding. Calls `DependencyExtractor` first (deterministic), then LLM, merges results |
 | `dependency_extractor.py` | AST-based import scanner for .py/.ipynb files. Maps import→pip names. Parses requirements.txt and %pip magic |
-| `model_researcher.py` | Per-model targeted arxiv research. Dynamic queries from model profile, model-specific relevance scoring, LLM synthesis |
+| `model_researcher.py` | Per-model targeted arxiv research. Domain-to-category mapping (credit→q-fin.RM, etc.), bigram extraction, ML stopword filtering, relevance-ranked search, LLM synthesis. Reads data_description.txt for richer queries. |
 | `methodology_planner.py` | Per-model validation plan: qualitative + quantitative blocks, check selection/skip/create, risk priorities. LLM-based with deterministic fallback |
 | `_stage_runner.py` | Shared orchestrator: queries CheckRegistry, runs checks with error catching |
 | `intake_check.py` | S0 orchestrator |
@@ -1000,6 +1000,14 @@ ml-models-to-validate/         # inbox (resolved relative to DATA_DIR)
 
 Four-tier feedback: Tier 0 (LLM self-assessment, weight 0.3), Tier 1 (improvement lift), Tier 2 (human, weight 1.0), Tier 3 (LLM cross-check, weight 0.5). Finding quality and recommendation quality tracked as independent dimensions. Graduated evolution gates: early phase (< 20 bundles with feedback) = low bar, mature phase = metric improvement required. Two literature scanning mechanisms: background (static queries, between validations) and per-model (dynamic queries from profile, during pipeline).
 
+### Docker Deployment
+
+`docker-entrypoint.sh` bootstraps `/repo` from `/app` on first start (copies full codebase, initializes git with `ouroboros` + `ouroboros-stable` branches). Subsequent starts skip bootstrap if `server.py` exists in `/repo`. Claude Code CLI (Node.js) installed in the image for evolution support.
+
 ### Docker Security
 
-In Docker deployment, 5 safety-critical files are bind-mounted as read-only: `BIBLE.md`, `ouroboros/safety.py`, `ouroboros/tools/registry.py`, `prompts/SAFETY.md`, `ouroboros/validation/sandbox.py`. Container runs as non-root user with `cap_drop: ALL` + `cap_add: SYS_ADMIN`. Resource limits: 6GB RAM, 4 CPU.
+5 safety-critical files are bind-mounted as read-only: `BIBLE.md`, `ouroboros/safety.py`, `ouroboros/tools/registry.py`, `prompts/SAFETY.md`, `ouroboros/validation/sandbox.py`. Container runs as non-root user with `cap_drop: ALL` + `cap_add: SYS_ADMIN`. Resource limits: 6GB RAM, 4 CPU.
+
+### Context Efficiency
+
+`README.md` removed from LLM context entirely. `ARCHITECTURE.md` loaded only for evolution tasks. `CHECKLISTS.md` loaded only for evolution and review tasks. Saves ~27,400 tokens per regular task call.
