@@ -40,6 +40,18 @@ if [ ! -f "$REPO_DIR/server.py" ]; then
     fi
 else
     echo "[entrypoint] Repo already bootstrapped (server.py exists)"
+    # Always sync web UI + prompts from /app to /repo (these should match the image)
+    echo "[entrypoint] Syncing web UI and prompts from app bundle..."
+    cp -a "$APP_DIR/web" "$REPO_DIR/"
+    cp -a "$APP_DIR/prompts" "$REPO_DIR/"
+    cp -a "$APP_DIR/BIBLE.md" "$REPO_DIR/" 2>/dev/null || true
+    cp -a "$APP_DIR/CLAUDE.md" "$REPO_DIR/" 2>/dev/null || true
+    cp -a "$APP_DIR/ouroboros/validation" "$REPO_DIR/ouroboros/" 2>/dev/null || true
+    cp -a "$APP_DIR/ouroboros/server_validation_api.py" "$REPO_DIR/ouroboros/" 2>/dev/null || true
+    cp -a "$APP_DIR/ouroboros/tools/model_intake.py" "$REPO_DIR/ouroboros/tools/" 2>/dev/null || true
+    cp -a "$APP_DIR/ouroboros/tools/validation.py" "$REPO_DIR/ouroboros/tools/" 2>/dev/null || true
+    cp -a "$APP_DIR/ouroboros/tools/validation_feedback.py" "$REPO_DIR/ouroboros/tools/" 2>/dev/null || true
+    cp -a "$APP_DIR/ouroboros/context.py" "$REPO_DIR/ouroboros/" 2>/dev/null || true
 fi
 
 # Start the server
