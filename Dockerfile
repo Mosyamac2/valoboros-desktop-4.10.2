@@ -29,8 +29,9 @@ COPY --from=builder /install /usr/local
 # Copy project source
 COPY . /app/
 
-# Create data directories
+# Create data directories and make entrypoint executable
 RUN mkdir -p /data /repo \
+    && chmod +x /app/docker-entrypoint.sh \
     && chown -R valoboros:valoboros /app /data /repo
 
 # Environment defaults
@@ -52,4 +53,4 @@ EXPOSE 8765
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8765/')" || exit 1
 
-CMD ["python", "server.py"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
