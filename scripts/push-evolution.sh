@@ -1,16 +1,19 @@
 #!/bin/bash
-# Push Valoboros evolution commits from /repo to GitHub
+# Push Valoboros evolution commits from /repo to a SEPARATE GitHub repo
 # Usage: ./scripts/push-evolution.sh [--setup]
 #
 # First run:  ./scripts/push-evolution.sh --setup
+#   - Creates a new GitHub repo (e.g. Mosyamac2/valoboros-evolved)
+#   - Configures it as the push target
 # After that: ./scripts/push-evolution.sh
 
 set -euo pipefail
 
 CONTAINER="valoboros"
-REMOTE_NAME="github"
-# Read from env or prompt
-GITHUB_URL="${VALOBOROS_GITHUB_URL:-}"
+REMOTE_NAME="evolution"
+GITHUB_PAT="${VALOBOROS_GITHUB_PAT:-}"
+GITHUB_USER="${VALOBOROS_GITHUB_USER:-}"
+GITHUB_REPO="${VALOBOROS_GITHUB_REPO:-valoboros-evolved}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -28,34 +31,87 @@ fi
 
 # ── Setup mode ────────────────────────────────────────────────────────
 if [[ "${1:-}" == "--setup" ]]; then
-    echo "=== Setting up GitHub remote in /repo ==="
+    echo "=== Setting up a SEPARATE GitHub repo for Valoboros evolution ==="
+    echo ""
+    echo "This keeps Mosyamac2/valoboros-desktop-4.10.2 intact."
+    echo "Evolution commits push to a new repo instead."
     echo ""
 
-    if [ -z "$GITHUB_URL" ]; then
-        echo "Enter your GitHub repo URL with PAT:"
-        echo "  Format: https://USERNAME:PAT@github.com/USERNAME/REPO.git"
-        echo "  Example: https://Mosyamac2:ghp_xxx@github.com/Mosyamac2/valoboros-desktop-4.10.2.git"
+    # Gather info
+    if [ -z "$GITHUB_USER" ]; then
+        read -rp "GitHub username [Mosyamac2]: " GITHUB_USER
+        GITHUB_USER="${GITHUB_USER:-Mosyamac2}"
+    fi
+
+    if [ -z "$GITHUB_PAT" ]; then
+        read -rsp "GitHub PAT (ghp_...): " GITHUB_PAT
         echo ""
-        read -rp "URL: " GITHUB_URL
     fi
 
-    if [ -z "$GITHUB_URL" ]; then
-        fail "No URL provided"
+    if [ -z "$GITHUB_PAT" ]; then
+        fail "No PAT provided"
     fi
 
-    # Check if remote exists
+    read -rp "New repo name [valoboros-evolved]: " input_repo
+    GITHUB_REPO="${input_repo:-valoboros-evolved}"
+
+    echo ""
+    echo "Will create: $GITHUB_USER/$GITHUB_REPO"
+    echo ""
+
+    # Create the repo on GitHub via API
+    echo "Creating repo on GitHub..."
+    create_result=$(curl -s -w "\n%{http_code}" \
+        -X POST \
+        -H "Authorization: token $GITHUB_PAT" \
+        -H "Accept: application/vnd.github+json" \
+        https://api.github.com/user/repos \
+        -d "{
+            \"name\": \"$GITHUB_REPO\",
+            \"description\": \"Valoboros self-evolved validation platform (auto-pushed from Docker /repo)\",
+            \"private\": false
+        }" 2>&1)
+
+    http_code=$(echo "$create_result" | tail -1)
+    body=$(echo "$create_result" | sed '$d')
+
+    if [ "$http_code" = "201" ]; then
+        ok "Repo created: https://github.com/$GITHUB_USER/$GITHUB_REPO"
+    elif [ "$http_code" = "422" ]; then
+        # Repo already exists
+        warn "Repo $GITHUB_USER/$GITHUB_REPO already exists (OK, will use it)"
+    else
+        echo "  API response ($http_code): $body"
+        fail "Failed to create repo"
+    fi
+
+    # Configure remote inside the container's /repo
+    GITHUB_URL="https://${GITHUB_USER}:${GITHUB_PAT}@github.com/${GITHUB_USER}/${GITHUB_REPO}.git"
+
     existing=$(docker exec "$CONTAINER" git -C /repo remote get-url "$REMOTE_NAME" 2>/dev/null || echo "")
     if [ -n "$existing" ]; then
-        warn "Remote '$REMOTE_NAME' already exists, updating URL..."
         docker exec "$CONTAINER" git -C /repo remote set-url "$REMOTE_NAME" "$GITHUB_URL"
     else
         docker exec "$CONTAINER" git -C /repo remote add "$REMOTE_NAME" "$GITHUB_URL"
     fi
 
-    ok "Remote '$REMOTE_NAME' configured"
+    ok "Remote '$REMOTE_NAME' → $GITHUB_USER/$GITHUB_REPO"
+
+    # Initial push
     echo ""
-    echo "Now run without --setup to push:"
-    echo "  ./scripts/push-evolution.sh"
+    echo "=== Initial push ==="
+    branch=$(docker exec "$CONTAINER" git -C /repo rev-parse --abbrev-ref HEAD 2>/dev/null || echo "ouroboros")
+    docker exec "$CONTAINER" git -C /repo push -u "$REMOTE_NAME" "$branch":main --tags --force 2>&1 && \
+        ok "Initial push complete" || \
+        fail "Initial push failed"
+
+    echo ""
+    ok "Setup complete!"
+    echo ""
+    echo "  Source repo (untouched): https://github.com/$GITHUB_USER/valoboros-desktop-4.10.2"
+    echo "  Evolution repo:          https://github.com/$GITHUB_USER/$GITHUB_REPO"
+    echo ""
+    echo "Run ./scripts/push-evolution.sh anytime to sync new evolution commits."
     exit 0
 fi
 
@@ -81,15 +137,13 @@ echo "Tags:"
 docker exec "$CONTAINER" git -C /repo tag --sort=-version:refname | head -10
 echo ""
 
-# Show what will be pushed
-echo "=== Pushing $branch → GitHub master ==="
-docker exec "$CONTAINER" git -C /repo push "$REMOTE_NAME" "$branch":master --tags 2>&1 && \
+# Push
+echo "=== Pushing $branch → evolution repo (main) ==="
+docker exec "$CONTAINER" git -C /repo push "$REMOTE_NAME" "$branch":main --tags 2>&1 && \
     ok "Pushed successfully" || \
     fail "Push failed"
 
 echo ""
-echo "=== Verifying ==="
 remote_url=$(docker exec "$CONTAINER" git -C /repo remote get-url "$REMOTE_NAME" 2>/dev/null)
-# Strip credentials for display
 display_url=$(echo "$remote_url" | sed -E 's|https://[^@]+@|https://|')
 ok "Pushed to $display_url"
