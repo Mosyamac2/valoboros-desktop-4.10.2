@@ -248,8 +248,29 @@ class AgenticValidator:
         )
 
     async def run_phase_c(self) -> AgenticPhaseResult:
-        raise NotImplementedError(
-            "Phase C (execution) lands in sub-phase 3 of plan v2."
+        """Phase C — run the ``validation_project`` and interpret results.
+
+        Reads ``./methodology/validation_project/`` (Phase B's output) and
+        ``./methodology/methodology.md`` (for ground truth on which tests
+        should exist). Writes ``./results/results.json`` (produced by
+        ``run_all.py``) and ``./results/interpretation.md`` (Claude's
+        interpretation).
+
+        Phase C is the only phase that actually executes the bundle's code,
+        so the SDK session needs ``Bash``. Resource protection comes from
+        two layers: (1) the SDK's ``cwd`` restriction + bundle path guard
+        block stray writes; (2) ``run_all.py`` itself wraps each test in
+        ``timeout 300`` per the Phase B contract.
+        """
+        user_prompt = load_phase_prompt("c")
+        return await self._run_phase(
+            phase="C",
+            user_prompt=user_prompt,
+            model="opus",
+            expected_outputs=[
+                self.bundle_dir / "results" / "results.json",
+                self.bundle_dir / "results" / "interpretation.md",
+            ],
         )
 
     async def run_phase_d(self) -> AgenticPhaseResult:
@@ -310,13 +331,35 @@ class AgenticValidator:
             agg.success = phase_b.success
             if not phase_b.success and not agg.error:
                 agg.error = f"phase_b:{phase_b.error}"
-        except NotImplementedError:
-            # Phase C/D would gate here too once Phase B is the cap.
-            pass
         except Exception as exc:
             agg.success = False
             agg.error = f"phase_b:{type(exc).__name__}:{exc}"
             log.exception("Agentic Phase B failed for bundle %s", self.bundle_id)
+            agg.finished_at = _utcnow_iso()
+            self._persist_aggregate(agg)
+            return agg
+
+        if not phase_b.success:
+            agg.finished_at = _utcnow_iso()
+            self._persist_aggregate(agg)
+            return agg
+
+        # Phase C — execution + interpretation
+        try:
+            phase_c = await self.run_phase_c()
+            agg.phases.append(phase_c)
+            agg.total_cost_usd += phase_c.cost_usd
+            agg.total_turns += phase_c.turns
+            agg.success = phase_c.success
+            if not phase_c.success and not agg.error:
+                agg.error = f"phase_c:{phase_c.error}"
+        except NotImplementedError:
+            # Phase D would gate here too once Phase C is the cap.
+            pass
+        except Exception as exc:
+            agg.success = False
+            agg.error = f"phase_c:{type(exc).__name__}:{exc}"
+            log.exception("Agentic Phase C failed for bundle %s", self.bundle_id)
 
         agg.finished_at = _utcnow_iso()
         self._persist_aggregate(agg)

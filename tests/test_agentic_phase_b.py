@@ -144,12 +144,12 @@ def _phase_b_writes_nothing(bundle: Path) -> None:
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_phase_b_chains_after_phase_a_and_validates_outputs(
+def test_phase_b_authors_project_and_validates_outputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Running ``AgenticValidator.run()`` invokes Phase A then Phase B.
-    Both phases land artifacts on disk and the aggregate reports both
-    as successful."""
+    """Running Phase A then Phase B directly produces both artifacts on
+    disk and reports them as files_written. End-to-end chained-run
+    behavior is exercised by tests/test_agentic_phase_c.py."""
     bundle_dir = tmp_path / "bundle"
     bundle_dir.mkdir()
     (bundle_dir / "raw").mkdir()
@@ -185,27 +185,20 @@ def test_phase_b_chains_after_phase_a_and_validates_outputs(
         repo_dir=repo_dir,
     )
 
-    result = _run_async(validator.run())
+    pa = _run_async(validator.run_phase_a())
+    pb = _run_async(validator.run_phase_b())
 
-    assert result.success is True, f"run reported failure: {result.error}"
-    assert [p.phase for p in result.phases] == ["A", "B"]
-    pa, pb = result.phases
-    assert pa.success and pb.success
+    assert pa.success is True
+    assert pb.success is True, f"phase B failed: {pb.error}"
     assert pa.cost_usd == pytest.approx(0.30)
     assert pb.cost_usd == pytest.approx(0.60)
-    assert result.total_cost_usd == pytest.approx(0.90)
+
     # Phase B files persisted
     assert (bundle_dir / "methodology" / "validation_project" / "run_all.py").exists()
     assert (bundle_dir / "methodology" / "validation_project" / "requirements.txt").exists()
     # Expected-output reporting
     assert "methodology/validation_project/run_all.py" in pb.files_written
     assert "methodology/validation_project/requirements.txt" in pb.files_written
-    # Aggregate persisted with both phases
-    blob = json.loads(
-        (bundle_dir / "_agentic_transcripts" / "result.json").read_text(encoding="utf-8")
-    )
-    assert len(blob["phases"]) == 2
-    assert blob["phases"][1]["phase"] == "B"
     # Per-phase transcripts persisted
     assert (bundle_dir / "_agentic_transcripts" / "phase_a.jsonl").exists()
     assert (bundle_dir / "_agentic_transcripts" / "phase_b.jsonl").exists()
