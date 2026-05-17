@@ -49,3 +49,10 @@ Thumbs.db
 # Test artifacts
 <MagicMock*
 .tmp-data-*/
+
+# Example model bundles (user-supplied — may contain proprietary data)
+prepayment_consumer_loans_model.zip
+Complaints_Classification_NLP_model.zip
+
+# Harvester runtime artifacts
+.kaggle_harvester/

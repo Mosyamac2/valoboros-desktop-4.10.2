@@ -1,0 +1,13 @@
+# Harvester-only dependencies — kept separate from Valoboros's main
+# requirements.txt to avoid polluting the agent runtime.
+#
+# We do NOT use the legacy `kaggle` Python SDK. Kaggle's new OAuth-style
+# API tokens (KGAT_<hex>) require Bearer-token auth, not the HTTP Basic
+# Auth flow the SDK is built around. The harvester talks to Kaggle's REST
+# API directly with `requests`.
+requests>=2.31
+nbformat>=5
+nbconvert>=7
+pandas>=2
+pyarrow>=14
+scikit-learn>=1.4

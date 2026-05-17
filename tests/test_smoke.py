@@ -352,14 +352,24 @@ def test_no_env_dumping():
     """
     # Only flag raw os.environ passed to print/json/log without bracket or .get( accessor
     dangerous = re.compile(r'(?:print|json\.dumps|log)\s*\(.*\bos\.environ\b(?!\s*[\[.])')
+    skip_dirs = {
+        '.git', '__pycache__', 'tests',
+        '.venv', 'venv', 'env', '.env',
+        'node_modules', 'build', 'dist', '.tox', '.mypy_cache',
+    }
     violations = []
     for root, dirs, files in os.walk(REPO):
-        dirs[:] = [d for d in dirs if d not in ('.git', '__pycache__', 'tests')]
+        dirs[:] = [d for d in dirs if d not in skip_dirs]
         for f in files:
             if not f.endswith(".py"):
                 continue
             path = pathlib.Path(root) / f
-            for i, line in enumerate(path.read_text().splitlines(), 1):
+            try:
+                content = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                # Third-party / vendored files with non-UTF8 encodings — skip.
+                continue
+            for i, line in enumerate(content.splitlines(), 1):
                 if line.strip().startswith("#"):
                     continue
                 if dangerous.search(line):
