@@ -819,9 +819,13 @@ def _claude_code_edit(ctx: ToolContext, prompt: str, cwd: str = "",
     """
     from ouroboros.tools.git import _acquire_git_lock, _release_git_lock
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return "⚠️ CLAUDE_CODE_UNAVAILABLE: ANTHROPIC_API_KEY not set."
+    oauth_token = (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "") or "").strip()
+    api_key = (os.environ.get("ANTHROPIC_API_KEY", "") or "").strip()
+    if not oauth_token and not api_key:
+        return (
+            "⚠️ CLAUDE_CODE_UNAVAILABLE: neither CLAUDE_CODE_OAUTH_TOKEN nor "
+            "ANTHROPIC_API_KEY is set."
+        )
 
     work_dir = str(ctx.repo_dir)
     if cwd and cwd.strip() not in ("", ".", "./"):
@@ -904,7 +908,13 @@ def _claude_code_edit(ctx: ToolContext, prompt: str, cwd: str = "",
         )
 
         env = os.environ.copy()
-        env["ANTHROPIC_API_KEY"] = api_key
+        if oauth_token:
+            # Prefer subscription billing. Anthropic CLI uses API key over
+            # OAuth when both are present, so explicitly clear it.
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+            env.pop("ANTHROPIC_API_KEY", None)
+        elif api_key:
+            env["ANTHROPIC_API_KEY"] = api_key
         try:
             if hasattr(os, "geteuid") and os.geteuid() == 0:
                 env.setdefault("IS_SANDBOX", "1")

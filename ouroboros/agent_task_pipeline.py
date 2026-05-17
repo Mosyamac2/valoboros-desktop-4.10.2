@@ -22,49 +22,14 @@ from ouroboros.utils import utc_now_iso, append_jsonl
 log = logging.getLogger(__name__)
 
 
-def _parse_model_provider(model: str) -> str:
-    model_name = str(model or "").strip()
-    for prefix, provider in (
-        ("openai::", "openai"),
-        ("anthropic::", "anthropic"),
-        ("cloudru::", "cloudru"),
-        ("openai-compatible::", "openai-compatible"),
-        ("openrouter::", "openrouter"),
-    ):
-        if model_name.startswith(prefix):
-            return provider
-    return "openrouter"
-
-
-def _has_provider_credentials(provider: str) -> bool:
-    if provider == "openai":
-        return bool(str(os.environ.get("OPENAI_API_KEY", "") or "").strip())
-    if provider == "anthropic":
-        return bool(str(os.environ.get("ANTHROPIC_API_KEY", "") or "").strip())
-    if provider == "cloudru":
-        return bool(str(os.environ.get("CLOUDRU_FOUNDATION_MODELS_API_KEY", "") or "").strip())
-    if provider == "openai-compatible":
-        compatible_key = str(os.environ.get("OPENAI_COMPATIBLE_API_KEY", "") or "").strip()
-        legacy_key = str(os.environ.get("OPENAI_API_KEY", "") or "").strip()
-        legacy_base = str(os.environ.get("OPENAI_BASE_URL", "") or "").strip()
-        return bool(compatible_key or (legacy_key and legacy_base))
-    return bool(str(os.environ.get("OPENROUTER_API_KEY", "") or "").strip())
-
-
 def _resolve_task_summary_model(default_model: str) -> str:
-    if _has_provider_credentials(_parse_model_provider(default_model)):
-        return default_model
+    """Return the configured task-summary model.
 
-    for env_name in (
-        "OUROBOROS_MODEL_LIGHT",
-        "OUROBOROS_MODEL_FALLBACK",
-        "OUROBOROS_MODEL",
-        "OUROBOROS_MODEL_CODE",
-    ):
-        candidate = str(os.environ.get(env_name, "") or "").strip()
-        if candidate and _has_provider_credentials(_parse_model_provider(candidate)):
-            return candidate
-    return default_model
+    Under the OAuth migration there is a single cloud provider, so multi-provider
+    credential routing is no longer needed. Honors OUROBOROS_MODEL_LIGHT if set.
+    """
+    light = str(os.environ.get("OUROBOROS_MODEL_LIGHT", "") or "").strip()
+    return light or default_model
 
 
 def _truncate_with_notice(text: Any, limit: int) -> str:

@@ -208,9 +208,13 @@ def _run_claude_advisory(
     items is a list of review finding dicts (may be empty on error).
     raw_result is the raw output string.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return [], "⚠️ ADVISORY_ERROR: ANTHROPIC_API_KEY not set."
+    oauth_token = (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "") or "").strip()
+    api_key = (os.environ.get("ANTHROPIC_API_KEY", "") or "").strip()
+    if not oauth_token and not api_key:
+        return [], (
+            "⚠️ ADVISORY_ERROR: neither CLAUDE_CODE_OAUTH_TOKEN nor "
+            "ANTHROPIC_API_KEY is set."
+        )
 
     prompt = _build_advisory_prompt(repo_dir, commit_message, goal=goal, scope=scope, paths=paths)
 
@@ -256,7 +260,11 @@ def _run_claude_advisory(
     cmd_legacy = cmd + ["--dangerously-skip-permissions"]
 
     env = os.environ.copy()
-    env["ANTHROPIC_API_KEY"] = api_key
+    if oauth_token:
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth_token
+        env.pop("ANTHROPIC_API_KEY", None)
+    elif api_key:
+        env["ANTHROPIC_API_KEY"] = api_key
     try:
         from ouroboros.tools.shell import _build_augmented_path
         env["PATH"] = _build_augmented_path()
@@ -395,9 +403,12 @@ def _handle_advisory_pre_review(
     state = load_state(drive_root)
     task_id = str(getattr(ctx, "task_id", "") or "")
 
-    # Auto-bypass if Anthropic key is absent — audit it transparently
-    if not os.environ.get("ANTHROPIC_API_KEY", ""):
-        reason = "ANTHROPIC_API_KEY not set — auto-bypassed"
+    # Auto-bypass if no Claude auth (OAuth subscription OR legacy API key)
+    # is present — audit it transparently.
+    has_oauth = bool((os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "") or "").strip())
+    has_api_key = bool((os.environ.get("ANTHROPIC_API_KEY", "") or "").strip())
+    if not has_oauth and not has_api_key:
+        reason = "No Claude auth (CLAUDE_CODE_OAUTH_TOKEN/ANTHROPIC_API_KEY) — auto-bypassed"
         _audit_bypass(ctx, snapshot_hash, commit_message, reason, task_id)
         run = AdvisoryRunRecord(
             snapshot_hash=snapshot_hash,
@@ -414,9 +425,9 @@ def _handle_advisory_pre_review(
             "snapshot_hash": snapshot_hash,
             "bypass_reason": reason,
             "message": (
-                "⚠️ ANTHROPIC_API_KEY is not set — advisory review skipped automatically. "
+                "⚠️ Claude auth is not configured — advisory review skipped automatically. "
                 "Bypass has been durably audited in events.jsonl. "
-                "Set ANTHROPIC_API_KEY in Settings to enable Claude Code advisory reviews."
+                "Set CLAUDE_CODE_OAUTH_TOKEN in Settings to enable Claude Code advisory reviews."
             ),
         }, ensure_ascii=False, indent=2)
 

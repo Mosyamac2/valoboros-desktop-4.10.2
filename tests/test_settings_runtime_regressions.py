@@ -35,13 +35,13 @@ def test_load_settings_uses_env_fallback_for_missing_keys(monkeypatch, tmp_path)
     settings_path.write_text(json.dumps({"TOTAL_BUDGET": 7}), encoding="utf-8")
     file_root = tmp_path / "workspace"
     file_root.mkdir()
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-env")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-oauth-env")
     monkeypatch.setenv("OUROBOROS_FILE_BROWSER_DEFAULT", str(file_root))
 
     settings = config_module.load_settings()
 
     assert settings["TOTAL_BUDGET"] == 7.0
-    assert settings["OPENAI_API_KEY"] == "sk-openai-env"
+    assert settings["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-oauth-env"
     assert settings["OUROBOROS_FILE_BROWSER_DEFAULT"] == str(file_root)
 
 
@@ -52,18 +52,18 @@ def test_load_settings_prefers_explicit_file_values_over_env(monkeypatch, tmp_pa
     settings_path.write_text(
         json.dumps(
             {
-                "OPENAI_API_KEY": "sk-openai-file",
+                "CLAUDE_CODE_OAUTH_TOKEN": "sk-oauth-file",
                 "OUROBOROS_FILE_BROWSER_DEFAULT": str(file_root),
             }
         ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-env")
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-oauth-env")
     monkeypatch.setenv("OUROBOROS_FILE_BROWSER_DEFAULT", str(tmp_path / "env-root"))
 
     settings = config_module.load_settings()
 
-    assert settings["OPENAI_API_KEY"] == "sk-openai-file"
+    assert settings["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-oauth-file"
     assert settings["OUROBOROS_FILE_BROWSER_DEFAULT"] == str(file_root)
 
 
@@ -72,28 +72,28 @@ def test_merge_settings_payload_preserves_masked_secrets(monkeypatch, tmp_path):
 
     merged = server_module._merge_settings_payload(
         {
-            "OPENAI_API_KEY": "sk-openai-real-secret",
-            "OUROBOROS_MODEL": "openai::gpt-4.1",
+            "CLAUDE_CODE_OAUTH_TOKEN": "sk-oauth-real-secret",
+            "OUROBOROS_MODEL": "anthropic/claude-opus-4.6",
         },
         {
-            "OPENAI_API_KEY": "sk-opena...",
-            "OUROBOROS_MODEL": "openai::gpt-5",
+            "CLAUDE_CODE_OAUTH_TOKEN": "sk-oauth...",
+            "OUROBOROS_MODEL": "anthropic/claude-sonnet-4.6",
         },
     )
 
-    assert merged["OPENAI_API_KEY"] == "sk-openai-real-secret"
-    assert merged["OUROBOROS_MODEL"] == "openai::gpt-5"
+    assert merged["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-oauth-real-secret"
+    assert merged["OUROBOROS_MODEL"] == "anthropic/claude-sonnet-4.6"
 
 
 def test_merge_settings_payload_allows_explicit_secret_clear(monkeypatch, tmp_path):
     server_module = _reload_server(monkeypatch, tmp_path)
 
     merged = server_module._merge_settings_payload(
-        {"OPENAI_API_KEY": "sk-openai-real-secret"},
-        {"OPENAI_API_KEY": ""},
+        {"CLAUDE_CODE_OAUTH_TOKEN": "sk-oauth-real-secret"},
+        {"CLAUDE_CODE_OAUTH_TOKEN": ""},
     )
 
-    assert merged["OPENAI_API_KEY"] == ""
+    assert merged["CLAUDE_CODE_OAUTH_TOKEN"] == ""
 
 
 def test_restart_current_process_falls_back_to_spawn_on_exec_failure(monkeypatch, tmp_path):

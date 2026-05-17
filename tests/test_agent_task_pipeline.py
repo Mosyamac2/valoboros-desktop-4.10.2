@@ -4,13 +4,13 @@ from types import SimpleNamespace
 import ouroboros.agent_task_pipeline as pipeline
 
 
-def test_task_summary_prefers_direct_model_when_openrouter_missing(tmp_path, monkeypatch):
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
-    monkeypatch.setenv("OUROBOROS_MODEL_LIGHT", "openai::gpt-5.4-mini")
-    monkeypatch.setenv("OUROBOROS_MODEL_FALLBACK", "openai::gpt-5.4-mini")
-    monkeypatch.setenv("OUROBOROS_MODEL", "openai::gpt-5.4")
-    monkeypatch.setenv("OUROBOROS_MODEL_CODE", "openai::gpt-5.4")
+def test_task_summary_uses_light_model_when_set(tmp_path, monkeypatch):
+    """Under OAuth there is one provider; the summary picks
+    OUROBOROS_MODEL_LIGHT when it differs from the default."""
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-test-oauth")
+    monkeypatch.setenv("OUROBOROS_MODEL_LIGHT", "anthropic/claude-sonnet-4.6")
+    monkeypatch.setenv("OUROBOROS_MODEL", "anthropic/claude-opus-4.6")
+    monkeypatch.setenv("OUROBOROS_MODEL_CODE", "anthropic/claude-opus-4.6")
 
     captured = {}
 
@@ -34,7 +34,7 @@ def test_task_summary_prefers_direct_model_when_openrouter_missing(tmp_path, mon
         drive_logs=drive_logs,
     )
 
-    assert captured["model"] == "openai::gpt-5.4-mini"
+    assert captured["model"] == "anthropic/claude-sonnet-4.6"
     chat_lines = (drive_logs / "chat.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(chat_lines) == 1
     payload = json.loads(chat_lines[0])
@@ -42,13 +42,11 @@ def test_task_summary_prefers_direct_model_when_openrouter_missing(tmp_path, mon
     assert payload["text"] == "direct summary ok"
 
 
-def test_task_summary_keeps_openrouter_model_when_key_present(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
-    monkeypatch.setenv("OUROBOROS_MODEL_LIGHT", "openai::gpt-5.4-mini")
-
+def test_task_summary_falls_back_to_default_when_light_unset(monkeypatch):
+    monkeypatch.delenv("OUROBOROS_MODEL_LIGHT", raising=False)
     assert (
-        pipeline._resolve_task_summary_model("google/gemini-3-flash-preview")
-        == "google/gemini-3-flash-preview"
+        pipeline._resolve_task_summary_model("anthropic/claude-opus-4.6")
+        == "anthropic/claude-opus-4.6"
     )
 
 

@@ -90,8 +90,12 @@
         return trim(state.anthropicKey).length >= 10;
     }
 
+    function hasClaudeOauthConfigured() {
+        return trim(state.claudeOauthToken).length >= 10;
+    }
+
     function shouldShowClaudeCliCta() {
-        return hasAnthropicKeyConfigured() && !state.claudeCliDismissed;
+        return (hasClaudeOauthConfigured() || hasAnthropicKeyConfigured()) && !state.claudeCliDismissed;
     }
 
     function isLocalFilesystemSource(value) {
@@ -100,15 +104,12 @@
     }
 
     function detectProviderProfile() {
-        const hasOpenrouter = trim(state.openrouterKey).length >= 10;
-        const hasOpenai = trim(state.openaiKey).length >= 10;
+        const hasOauth = trim(state.claudeOauthToken).length >= 10;
         const hasAnthropic = trim(state.anthropicKey).length >= 10;
-        if (hasOpenrouter) return 'openrouter';
-        if (hasOpenai && hasAnthropic) return 'direct-multi';
-        if (hasOpenai) return 'openai';
+        if (hasOauth) return 'claude_code_oauth';
         if (hasAnthropic) return 'anthropic';
         if (hasLocalModel()) return 'local';
-        return 'openrouter';
+        return 'claude_code_oauth';
     }
 
     function activeProviderProfile() {
@@ -118,11 +119,10 @@
     }
 
     function profileLabel(profile) {
-        if (profile === 'openai') return 'OpenAI';
-        if (profile === 'anthropic') return 'Anthropic';
-        if (profile === 'direct-multi') return 'OpenAI + Anthropic';
+        if (profile === 'claude_code_oauth') return 'Claude Code Subscription';
+        if (profile === 'anthropic') return 'Anthropic API key';
         if (profile === 'local') return 'Local-first';
-        return 'OpenRouter';
+        return 'Claude Code Subscription';
     }
 
     function reviewLabel(mode) {
@@ -180,7 +180,10 @@
 
     function applyModelDefaults(force) {
         if (state.modelsDirty && !force) return;
-        const defaults = MODEL_DEFAULTS[activeProviderProfile()] || MODEL_DEFAULTS.openrouter || {};
+        const defaults = MODEL_DEFAULTS[activeProviderProfile()]
+            || MODEL_DEFAULTS.claude_code_oauth
+            || MODEL_DEFAULTS.openrouter
+            || {};
         state.mainModel = defaults.main || '';
         state.codeModel = defaults.code || '';
         state.lightModel = defaults.light || '';
@@ -189,18 +192,16 @@
     }
 
     function validateProvidersStep() {
-        const openrouterKey = trim(state.openrouterKey);
-        const openaiKey = trim(state.openaiKey);
+        const claudeOauthToken = trim(state.claudeOauthToken);
         const anthropicKey = trim(state.anthropicKey);
         const localSource = trim(state.localSource);
         const localFilename = trim(state.localFilename);
-        if (openrouterKey && openrouterKey.length < 10) return 'OpenRouter API key looks too short.';
-        if (openaiKey && openaiKey.length < 10) return 'OpenAI API key looks too short.';
+        if (claudeOauthToken && claudeOauthToken.length < 10) return 'Claude OAuth subscription token looks too short.';
         if (anthropicKey && anthropicKey.length < 10) return 'Anthropic API key looks too short.';
-        if (!openrouterKey && !openaiKey && !anthropicKey && !localSource) {
-            return 'Enter at least one remote key or a local model source before continuing.';
+        if (!claudeOauthToken && !anthropicKey && !localSource) {
+            return 'Configure a Claude OAuth subscription token (recommended), an Anthropic API key, or a local model before continuing.';
         }
-        if (localSource && !openrouterKey && !openaiKey && !anthropicKey && trim(state.localRoutingMode) === 'cloud') {
+        if (localSource && !claudeOauthToken && !anthropicKey && trim(state.localRoutingMode) === 'cloud') {
             return 'Local-only setups must route at least one model to the local runtime.';
         }
         if (localSource && localSource.includes('/') && !isLocalFilesystemSource(localSource) && !localFilename) {
@@ -470,9 +471,8 @@
             ['Light', trim(state.lightModel)],
             ['Fallback', trim(state.fallbackModel)],
         ];
-        if (trim(state.openrouterKey)) rows.splice(1, 0, ['OpenRouter', 'configured']);
-        if (trim(state.openaiKey)) rows.splice(1, 0, ['OpenAI', 'configured']);
-        if (trim(state.anthropicKey)) rows.splice(1, 0, ['Anthropic', 'configured']);
+        if (trim(state.claudeOauthToken)) rows.splice(1, 0, ['Claude OAuth token', 'configured']);
+        if (trim(state.anthropicKey)) rows.splice(1, 0, ['Anthropic API key', 'configured']);
         if (hasLocalModel()) {
             rows.splice(
                 1,
@@ -496,43 +496,31 @@
                 </div>
             </div>
             <div class="panel-card">
-                <h3>Keys first, routing second</h3>
+                <h3>Claude subscription is the cloud backend</h3>
                 <p>${escapeHtml(
-                    trim(state.openrouterKey)
-                        ? 'OpenRouter is present, so the next step keeps router-style defaults while still saving any extra direct keys you paste here.'
-                        : selectedProfile === 'direct-multi'
-                            ? 'OpenAI and Anthropic are both present, so the next step keeps both direct-provider options visible.'
-                            : selectedProfile === 'openai'
-                                ? 'OpenAI is present, so the next step prefills direct openai:: model values.'
-                                : selectedProfile === 'anthropic'
-                                    ? 'Anthropic is present, so the next step prefills direct anthropic:: model values.'
-                                    : 'No remote key is present yet, so local-only setup remains available below.'
+                    selectedProfile === 'claude_code_oauth'
+                        ? 'A Claude OAuth subscription token is present. The next step prefills Claude model ids; the agent will bill against your subscription, not per-token API rates.'
+                        : selectedProfile === 'anthropic'
+                            ? 'An Anthropic API key is present (per-token billing). For flat-rate billing, generate an OAuth token with `claude setup-token` and paste it above.'
+                            : 'No cloud auth is configured yet. Generate an OAuth token with `claude setup-token` and paste it above, or fall back to a local model below.'
                 )}</p>
             </div>
             <div class="field-grid">
                 <div class="field">
                     <div class="field-label-row">
-                        <label for="openrouter-key">OpenRouter API Key</label>
-                        <button class="field-clear" data-clear="openrouter-key" type="button">Clear</button>
+                        <label for="claude-oauth-token">Claude OAuth subscription token <span class="selection-badge">Recommended</span></label>
+                        <button class="field-clear" data-clear="claude-oauth-token" type="button">Clear</button>
                     </div>
-                    <input id="openrouter-key" type="password" placeholder="sk-or-v1-..." value="${escapeHtml(state.openrouterKey)}">
-                    <div class="field-note">Optional. Best when you want one router for OpenAI, Anthropic, Google, and more.</div>
+                    <input id="claude-oauth-token" type="password" placeholder="sk-ant-oat01-..." value="${escapeHtml(state.claudeOauthToken)}">
+                    <div class="field-note">Generated by <code>claude setup-token</code>. Bills against your Pro/Max subscription. The agent unsets <code>ANTHROPIC_API_KEY</code> in child processes when this token is set so the CLI uses subscription billing.</div>
                 </div>
                 <div class="field">
                     <div class="field-label-row">
-                        <label for="openai-key">OpenAI API Key</label>
-                        <button class="field-clear" data-clear="openai-key" type="button">Clear</button>
-                    </div>
-                    <input id="openai-key" type="password" placeholder="sk-..." value="${escapeHtml(state.openaiKey)}">
-                    <div class="field-note">Optional. If this is the only remote key, the next step prefills direct <code>openai::...</code> models.</div>
-                </div>
-                <div class="field">
-                    <div class="field-label-row">
-                        <label for="anthropic-key">Anthropic API Key</label>
+                        <label for="anthropic-key">Anthropic API Key <span class="selection-badge">Legacy</span></label>
                         <button class="field-clear" data-clear="anthropic-key" type="button">Clear</button>
                     </div>
                     <input id="anthropic-key" type="password" placeholder="sk-ant-..." value="${escapeHtml(state.anthropicKey)}">
-                    <div class="field-note">Optional. Saved for direct <code>anthropic::...</code> models and Claude tooling.</div>
+                    <div class="field-note">Optional fallback for per-token billing. Used only if the OAuth token is empty.</div>
                 </div>
             </div>
             ${renderClaudeCliControls()}
@@ -787,8 +775,7 @@
         root.querySelectorAll('[data-clear]').forEach((button) => {
             button.addEventListener('click', () => {
                 const target = button.getAttribute('data-clear');
-                if (target === 'openrouter-key') state.openrouterKey = '';
-                if (target === 'openai-key') state.openaiKey = '';
+                if (target === 'claude-oauth-token') state.claudeOauthToken = '';
                 if (target === 'anthropic-key') state.anthropicKey = '';
                 if (target === 'local-preset') {
                     state.localPreset = '';
@@ -813,8 +800,7 @@
                 state.localSourceOpen = details.open;
             });
         }
-        const openrouterInput = document.getElementById('openrouter-key');
-        const openaiInput = document.getElementById('openai-key');
+        const claudeOauthInput = document.getElementById('claude-oauth-token');
         const anthropicInput = document.getElementById('anthropic-key');
         const localPreset = document.getElementById('local-preset');
         const localSource = document.getElementById('local-source');
@@ -823,8 +809,18 @@
         const localGpuLayers = document.getElementById('local-gpu-layers');
         const localChatFormat = document.getElementById('local-chat-format');
 
-        if (openrouterInput) openrouterInput.addEventListener('input', () => { state.openrouterKey = openrouterInput.value; state.error = ''; syncCurrentStepActionState(); });
-        if (openaiInput) openaiInput.addEventListener('input', () => { state.openaiKey = openaiInput.value; state.error = ''; syncCurrentStepActionState(); });
+        if (claudeOauthInput) claudeOauthInput.addEventListener('input', () => {
+            const wasConfigured = hasClaudeOauthConfigured();
+            state.claudeOauthToken = claudeOauthInput.value;
+            if (!wasConfigured && hasClaudeOauthConfigured()) {
+                state.claudeCliDismissed = false;
+                startClaudeCliStatusPolling();
+                updateClaudeCliStatus();
+            }
+            state.error = '';
+            syncClaudeCliVisibility();
+            syncCurrentStepActionState();
+        });
         if (anthropicInput) anthropicInput.addEventListener('input', () => {
             const wasConfigured = hasAnthropicKeyConfigured();
             state.anthropicKey = anthropicInput.value;
@@ -1006,8 +1002,7 @@
         state.error = '';
         render();
         const payload = {
-            OPENROUTER_API_KEY: trim(state.openrouterKey),
-            OPENAI_API_KEY: trim(state.openaiKey),
+            CLAUDE_CODE_OAUTH_TOKEN: trim(state.claudeOauthToken),
             ANTHROPIC_API_KEY: trim(state.anthropicKey),
             TOTAL_BUDGET: Number(state.totalBudget || 0),
             OUROBOROS_PER_TASK_COST_USD: Number(state.perTaskCostUsd || 0),

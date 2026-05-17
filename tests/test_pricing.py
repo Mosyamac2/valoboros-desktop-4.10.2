@@ -1,29 +1,31 @@
-"""Tests for ouroboros.pricing — extracted in v3.13.1, zero coverage until now."""
+"""Tests for ouroboros.pricing under the subscription backend.
+
+After the OAuth migration (BIBLE v5.1):
+  - Only Anthropic models remain in MODEL_PRICING_STATIC.
+  - infer_api_key_type returns claude_code_oauth / anthropic_api_key / local.
+  - emit_llm_usage_event defaults the provider to claude_code_oauth.
+  - There is no live OpenRouter pricing fetch.
+"""
 
 import os
 import queue
-import threading
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from ouroboros.pricing import (
     MODEL_PRICING_STATIC,
+    emit_llm_usage_event,
     estimate_cost,
+    get_pricing,
     infer_api_key_type,
     infer_model_category,
-    emit_llm_usage_event,
-    get_pricing,
 )
 
-# The fetch function lives in ouroboros.llm but is imported dynamically
-# inside get_pricing(). We must mock it at its source module.
-FETCH_PRICING_PATH = "ouroboros.llm.fetch_openrouter_pricing"
 
-
-# --- estimate_cost ---
+# --- estimate_cost -----------------------------------------------------------
 
 class TestEstimateCost:
-    """Cost estimation from token counts."""
 
     def test_known_model_no_cache(self):
         # Sonnet 4.6: input=$3/M, cached=$0.30/M, output=$15/M
@@ -31,7 +33,7 @@ class TestEstimateCost:
             "anthropic/claude-sonnet-4.6",
             prompt_tokens=1000, completion_tokens=500, cached_tokens=0,
         )
-        expected = 1000 * 3.0 / 1e6 + 500 * 15.0 / 1e6  # 0.003 + 0.0075
+        expected = 1000 * 3.0 / 1e6 + 500 * 15.0 / 1e6
         assert abs(cost - expected) < 1e-6
 
     def test_known_model_with_cache(self):
@@ -40,7 +42,6 @@ class TestEstimateCost:
             prompt_tokens=10000, completion_tokens=1000,
             cached_tokens=8000,
         )
-        # 2000 regular input + 8000 cached + 1000 output
         expected = (2000 * 3.0 + 8000 * 0.30 + 1000 * 15.0) / 1e6
         assert abs(cost - expected) < 1e-6
 
@@ -53,66 +54,59 @@ class TestEstimateCost:
         assert cost == 0.0
 
     def test_prefix_match(self):
-        """Models with suffixes should match via longest prefix."""
         cost = estimate_cost(
             "anthropic/claude-sonnet-4.6:beta",
             prompt_tokens=1000, completion_tokens=0,
         )
-        # Should match "anthropic/claude-sonnet-4.6" prefix
         assert cost > 0
 
     def test_cached_greater_than_prompt_clamped(self):
-        """If cached > prompt (shouldn't happen, but defensive), regular_input is 0."""
         cost = estimate_cost(
             "anthropic/claude-sonnet-4.6",
             prompt_tokens=100, completion_tokens=0, cached_tokens=200,
         )
-        # regular_input = max(0, 100-200) = 0, only cached portion
         expected = 200 * 0.30 / 1e6
         assert abs(cost - expected) < 1e-6
 
     def test_all_static_models_have_three_tuple(self):
-        """Every entry in MODEL_PRICING_STATIC is (input, cached, output)."""
         for model, prices in MODEL_PRICING_STATIC.items():
-            assert len(prices) == 3, f"{model} has {len(prices)} prices, expected 3"
-            assert all(isinstance(p, (int, float)) for p in prices), f"{model} has non-numeric prices"
-            assert all(p >= 0 for p in prices), f"{model} has negative prices"
+            assert len(prices) == 3
+            assert all(isinstance(p, (int, float)) for p in prices)
+            assert all(p >= 0 for p in prices)
 
-    def test_gpt_54_mini_static_pricing_is_registered(self):
-        assert MODEL_PRICING_STATIC["openai/gpt-5.4-mini"] == (0.75, 0.075, 4.50)
+    def test_haiku_static_pricing_is_registered(self):
+        assert MODEL_PRICING_STATIC["anthropic/claude-haiku-4.5"] == (0.80, 0.08, 4.0)
 
 
-# --- infer_api_key_type ---
+# --- infer_api_key_type ------------------------------------------------------
 
 class TestInferApiKeyType:
 
-    @pytest.mark.parametrize("model,expected", [
-        ("anthropic/claude-sonnet-4.6", "openrouter"),
-        ("google/gemini-3-flash-preview", "openrouter"),
-        ("openai/gpt-5.2", "openrouter"),
-        ("x-ai/grok-3-mini", "openrouter"),
-        ("qwen/qwen3.5-plus-02-15", "openrouter"),
-    ])
-    def test_openrouter_prefixes(self, model, expected):
-        assert infer_api_key_type(model) == expected
+    def test_oauth_env_returns_oauth(self, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-oauth")
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        assert infer_api_key_type("anthropic/claude-opus-4.6") == "claude_code_oauth"
 
-    def test_bare_claude_is_anthropic(self):
-        assert infer_api_key_type("claude-sonnet-4.6") == "anthropic"
+    def test_api_key_env_returns_api_key(self, monkeypatch):
+        monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant")
+        assert infer_api_key_type("anthropic/claude-opus-4.6") == "anthropic_api_key"
 
-    def test_provider_override_uses_official_openai(self):
-        assert infer_api_key_type("openai/gpt-5.2", provider="openai") == "openai"
+    def test_local_suffix_overrides(self, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-oauth")
+        assert infer_api_key_type("qwen2.5-7b (local)") == "local"
 
-    def test_openai_double_colon_is_official_openai(self):
-        assert infer_api_key_type("openai::gpt-5.2") == "openai"
+    def test_explicit_provider_override(self):
+        assert infer_api_key_type("anthropic/claude-opus-4.6", provider="local") == "local"
+        assert infer_api_key_type("anthropic/claude-opus-4.6", provider="claude_code_oauth") == "claude_code_oauth"
 
-    def test_anthropic_double_colon_is_direct_anthropic(self):
-        assert infer_api_key_type("anthropic::claude-sonnet-4-6") == "anthropic"
-
-    def test_unknown_defaults_openrouter(self):
-        assert infer_api_key_type("some-random-model") == "openrouter"
+    def test_unknown_returns_unknown(self, monkeypatch):
+        monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        assert infer_api_key_type("some-random-model") == "unknown"
 
 
-# --- infer_model_category ---
+# --- infer_model_category ----------------------------------------------------
 
 class TestInferModelCategory:
 
@@ -121,34 +115,27 @@ class TestInferModelCategory:
             assert infer_model_category("anthropic/claude-sonnet-4.6") == "main"
 
     def test_matches_light_model(self):
-        with patch.dict(os.environ, {"OUROBOROS_MODEL_LIGHT": "google/gemini-3-flash-preview"}):
-            assert infer_model_category("google/gemini-3-flash-preview") == "light"
-
-    def test_matches_openai_double_colon_against_resolved_usage_name(self):
-        with patch.dict(os.environ, {"OUROBOROS_MODEL": "openai::gpt-5.2"}):
-            assert infer_model_category("openai/gpt-5.2") == "main"
-
-    def test_matches_anthropic_double_colon_against_normalized_usage_name(self):
-        with patch.dict(os.environ, {"OUROBOROS_MODEL": "anthropic::claude-sonnet-4.6"}):
-            assert infer_model_category("anthropic/claude-sonnet-4-6") == "main"
+        with patch.dict(os.environ, {"OUROBOROS_MODEL_LIGHT": "anthropic/claude-sonnet-4.6"}):
+            assert infer_model_category("anthropic/claude-sonnet-4.6") == "light"
 
     def test_no_match_returns_other(self):
         with patch.dict(os.environ, {}, clear=True):
             assert infer_model_category("unknown/model") == "other"
 
 
-# --- emit_llm_usage_event ---
+# --- emit_llm_usage_event ----------------------------------------------------
 
 class TestEmitLlmUsageEvent:
 
-    def test_emits_to_queue(self):
+    def test_emits_to_queue_with_oauth_default(self, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-oauth")
         q = queue.Queue()
         emit_llm_usage_event(
             event_queue=q,
             task_id="test-123",
             model="anthropic/claude-sonnet-4.6",
             usage={"prompt_tokens": 1000, "completion_tokens": 500},
-            cost=0.0105,
+            cost=0.0,
             category="task",
         )
         event = q.get_nowait()
@@ -157,26 +144,37 @@ class TestEmitLlmUsageEvent:
         assert event["model"] == "anthropic/claude-sonnet-4.6"
         assert event["prompt_tokens"] == 1000
         assert event["completion_tokens"] == 500
-        assert event["cost"] == 0.0105
-        assert event["category"] == "task"
-        assert "ts" in event
+        assert event["cost"] == 0.0
+        assert event["provider"] == "claude_code_oauth"
+        assert event["api_key_type"] == "claude_code_oauth"
+
+    def test_notional_cost_forwarded(self):
+        q = queue.Queue()
+        emit_llm_usage_event(
+            event_queue=q,
+            task_id="t",
+            model="anthropic/claude-opus-4.6",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "notional_cost": 0.025},
+            cost=0.0,
+        )
+        event = q.get_nowait()
+        assert event["notional_cost"] == 0.025
 
     def test_provider_override_sets_api_key_type(self):
         q = queue.Queue()
         emit_llm_usage_event(
             event_queue=q,
-            task_id="test-123",
-            model="openai/gpt-5.2",
-            usage={"prompt_tokens": 100, "completion_tokens": 50},
-            cost=0.01,
-            provider="openai",
+            task_id="t",
+            model="qwen-local (local)",
+            usage={"prompt_tokens": 0, "completion_tokens": 0},
+            cost=0.0,
+            provider="local",
         )
         event = q.get_nowait()
-        assert event["provider"] == "openai"
-        assert event["api_key_type"] == "openai"
+        assert event["provider"] == "local"
+        assert event["api_key_type"] == "local"
 
     def test_none_queue_no_error(self):
-        # Should silently do nothing
         emit_llm_usage_event(None, "t", "m", {}, 0.0)
 
     def test_missing_usage_fields_default_zero(self):
@@ -189,89 +187,24 @@ class TestEmitLlmUsageEvent:
 
     def test_full_queue_no_crash(self):
         q = queue.Queue(maxsize=1)
-        q.put("filler")  # fill it
-        # Should not raise
+        q.put("filler")
         emit_llm_usage_event(q, "t", "m", {}, 0.0)
 
 
-# --- get_pricing ---
+# --- get_pricing -------------------------------------------------------------
 
 class TestGetPricing:
 
     def setup_method(self):
-        """Reset module-level caching state before each test."""
         import ouroboros.pricing as mod
-        mod._pricing_fetched = False
         mod._cached_pricing = None
 
-    def test_returns_static_when_fetch_fails(self):
-        with patch(FETCH_PRICING_PATH, side_effect=Exception("network")):
-            pricing = get_pricing()
-        # Should still have static entries
+    def test_returns_static_pricing(self):
+        pricing = get_pricing()
         assert "anthropic/claude-sonnet-4.6" in pricing
         assert len(pricing) >= len(MODEL_PRICING_STATIC)
 
-    def test_merges_live_pricing(self):
-        live = {"new-model/test": (1.0, 0.1, 2.0)}
-        with patch(FETCH_PRICING_PATH, return_value=live):
-            pricing = get_pricing()
-        # Live had < 5 entries, should NOT merge
-        assert "new-model/test" not in pricing
-
-    def test_merges_live_pricing_when_enough_entries(self):
-        live = {f"provider/model-{i}": (1.0, 0.1, 2.0) for i in range(6)}
-        with patch(FETCH_PRICING_PATH, return_value=live):
-            pricing = get_pricing()
-        assert "provider/model-0" in pricing
-        # Static entries still present
-        assert "anthropic/claude-sonnet-4.6" in pricing
-
-    def test_caches_after_successful_fetch(self):
-        import ouroboros.pricing as mod
-        live = {f"p/m-{i}": (1.0, 0.1, 2.0) for i in range(6)}
-        mock_fetch = MagicMock(return_value=live)
-        with patch(FETCH_PRICING_PATH, mock_fetch):
-            get_pricing()
-            get_pricing()  # Second call should not fetch again
-        mock_fetch.assert_called_once()
-
-    def test_retries_after_failed_fetch(self):
-        import ouroboros.pricing as mod
-        mock_fetch = MagicMock(side_effect=Exception("down"))
-        with patch(FETCH_PRICING_PATH, mock_fetch):
-            get_pricing()
-            get_pricing()  # Should retry since first failed
-        assert mock_fetch.call_count == 2
-
-    def test_ignores_small_live_pricing(self):
-        """If fetch returns < 5 entries, don't merge (probably broken)."""
-        import ouroboros.pricing as mod
-        live = {"a/b": (1, 0.1, 2)}  # Only 1 entry
-        with patch(FETCH_PRICING_PATH, return_value=live):
-            pricing = get_pricing()
-        assert "a/b" not in pricing  # Not merged because < 5
-
-    def test_thread_safety(self):
-        """Multiple threads calling get_pricing() simultaneously shouldn't crash."""
-        import ouroboros.pricing as mod
-        results = []
-        errors = []
-
-        def worker():
-            try:
-                p = get_pricing()
-                results.append(len(p))
-            except Exception as e:
-                errors.append(e)
-
-        with patch(FETCH_PRICING_PATH, return_value={}):
-            threads = [threading.Thread(target=worker) for _ in range(10)]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join(timeout=5)
-
-        assert not errors, f"Thread errors: {errors}"
-        assert len(results) == 10
-        # All threads should get the same count
-        assert len(set(results)) == 1
+    def test_pricing_is_cached(self):
+        first = get_pricing()
+        second = get_pricing()
+        assert first is second

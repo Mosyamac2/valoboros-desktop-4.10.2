@@ -75,42 +75,6 @@ def test_prepare_messages_for_local_context_raises_when_core_still_too_large():
         client._prepare_messages_for_local_context(messages, ctx_len=1000, max_tokens=400)
 
 
-def test_build_openrouter_kwargs_for_anthropic_keeps_require_parameters_only():
-    from ouroboros.llm import LLMClient
-
-    client = LLMClient()
-    kwargs = client._build_openrouter_kwargs(
-        messages=[{"role": "user", "content": "hi"}],
-        model="anthropic/claude-opus-4.6",
-        tools=None,
-        reasoning_effort="medium",
-        max_tokens=1000,
-        tool_choice="auto",
-        temperature=None,
-    )
-
-    assert kwargs["extra_body"]["provider"] == {"require_parameters": True}
-    assert "order" not in kwargs["extra_body"]["provider"]
-    assert "allow_fallbacks" not in kwargs["extra_body"]["provider"]
-
-
-def test_build_openrouter_kwargs_for_non_anthropic_has_no_provider_block():
-    from ouroboros.llm import LLMClient
-
-    client = LLMClient()
-    kwargs = client._build_openrouter_kwargs(
-        messages=[{"role": "user", "content": "hi"}],
-        model="openai/gpt-4.1",
-        tools=None,
-        reasoning_effort="medium",
-        max_tokens=1000,
-        tool_choice="auto",
-        temperature=None,
-    )
-
-    assert "provider" not in kwargs["extra_body"]
-
-
 def test_format_messages_for_safety_marks_omission():
     from ouroboros.safety import _format_messages_for_safety
 

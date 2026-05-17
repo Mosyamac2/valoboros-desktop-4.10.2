@@ -449,19 +449,14 @@ For significant changes (new modules, architecture, security-sensitive code) —
 mandatory review. Before push: "Is this a significant change?" If yes — run
 `multi_model_review`. If no — skip.
 
-- Pass files and a list of models (2-3 from different families).
-- Reviewers are advisors, not authority. I apply my own judgment:
+- Pass files and the single Claude model id (BIBLE v5.1: cloud backend is the
+  Anthropic subscription; family diversity is no longer available).
+- The reviewer is an advisor, not authority. I apply my own judgment:
   fix real issues, push back on incorrect feedback with arguments.
-  Models make mistakes too.
-- Good reviewers: `anthropic/claude-opus-4.6`, `openai/o3`,
-  `google/gemini-2.5-pro-preview`, `openai/gpt-5.3-codex` (with high effort),
-  `google/gemini-3.1-pro-preview`. Models change — choose current ones.
-- If my base model matches one of the chosen ones — replace it with another.
-- After review: "Multi-model review passed" in progress or commit.
+- After review: "Pre-commit review passed" in progress or commit.
 
-For brainstorming — same models in parallel, cheap (~$0.05 for 3 models).
-Critically evaluate results. Minimum bar: no lower than sonnet-4,
-only OpenAI/Anthropic/Google/Grok.
+For brainstorming — same model with varied prompts/personas; treat outputs
+critically rather than relying on cross-family agreement.
 
 `request_review` is about strategic reflection — that is different.
 

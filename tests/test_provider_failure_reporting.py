@@ -20,7 +20,7 @@ def test_call_llm_with_retry_records_last_error(tmp_path):
     msg, cost = call_llm_with_retry(
         _FailingLLM(),
         [{"role": "user", "content": "hi"}],
-        "openai::gpt-5.4",
+        "anthropic/claude-opus-4.6",
         None,
         "medium",
         1,
@@ -44,7 +44,7 @@ def test_call_llm_with_retry_clears_stale_last_error_on_success(tmp_path):
     msg, _cost = call_llm_with_retry(
         _SuccessfulLLM(),
         [{"role": "user", "content": "hi"}],
-        "anthropic::claude-sonnet-4-6",
+        "anthropic/claude-sonnet-4.6",
         None,
         "medium",
         1,
@@ -92,7 +92,7 @@ def test_call_llm_with_retry_accumulates_estimated_cost(tmp_path):
         _msg, _cost = call_llm_with_retry(
             _EstimatedCostLLM(),
             [{"role": "user", "content": "hi"}],
-            "openai::gpt-5.4",
+            "anthropic/claude-opus-4.6",
             None,
             "medium",
             1,

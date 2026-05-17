@@ -214,31 +214,21 @@ class TestProjectContext:
 # ---------------------------------------------------------------------------
 
 class TestImportFallback:
-    """Verify the gateway raises ImportError when SDK is unavailable."""
+    """SDK availability contract.
 
-    def test_gateway_import_requires_sdk(self):
-        """Without the real SDK (or our mock), import should raise ImportError."""
-        # We can't truly un-mock here, but we can verify the design intent:
-        # The module does `from claude_agent_sdk import ...` at module level,
-        # so ImportError is raised before any code runs.
-        # This test documents the contract.
-        import importlib
-        saved = sys.modules.get("claude_agent_sdk")
-        try:
-            # Temporarily remove the mock
-            sys.modules.pop("claude_agent_sdk", None)
-            # Also remove cached gateway module
-            sys.modules.pop("ouroboros.gateways.claude_code", None)
-            with pytest.raises(ImportError):
-                importlib.import_module("ouroboros.gateways.claude_code")
-        finally:
-            # Restore
-            if saved is not None:
-                sys.modules["claude_agent_sdk"] = saved
-            # Re-import with mock
-            sys.modules.pop("ouroboros.gateways.claude_code", None)
-            _ensure_gateway_importable()
-            importlib.import_module("ouroboros.gateways.claude_code")
+    Before v4.11.0 the SDK was optional and the gateway raised ImportError to
+    trigger a CLI subprocess fallback. The OAuth migration promoted the SDK
+    to a required dependency (`requirements.txt`, `pyproject.toml`), so this
+    block now only verifies that the gateway *imports* and exposes its public
+    symbols; the absent-SDK branch is no longer reachable in production.
+    """
+
+    def test_gateway_module_exposes_public_symbols(self):
+        import ouroboros.gateways.claude_code as gw
+        assert hasattr(gw, "ClaudeCodeResult")
+        assert hasattr(gw, "make_path_guard")
+        assert hasattr(gw, "make_readonly_guard")
+        assert hasattr(gw, "SAFETY_CRITICAL")
 
 
 # ---------------------------------------------------------------------------

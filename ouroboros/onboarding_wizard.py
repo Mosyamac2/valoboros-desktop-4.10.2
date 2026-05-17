@@ -7,20 +7,23 @@ import pathlib
 from typing import Any, Dict, Tuple
 
 from ouroboros.config import SETTINGS_DEFAULTS
-from ouroboros.provider_models import ANTHROPIC_DIRECT_DEFAULTS, OPENAI_DIRECT_DEFAULTS
+from ouroboros.provider_models import ANTHROPIC_DIRECT_DEFAULTS
 
 _ASSET_ROOT = pathlib.Path(__file__).resolve().parents[1] / "web"
 _TEMPLATE_PATH = _ASSET_ROOT / "onboarding_template.html"
 _CSS_PATH = _ASSET_ROOT / "onboarding.css"
 _JS_PATH = _ASSET_ROOT / "modules" / "onboarding_wizard.js"
 
-_OPENROUTER_MODEL_DEFAULTS = {
+_CLAUDE_OAUTH_MODEL_DEFAULTS = {
     "main": str(SETTINGS_DEFAULTS["OUROBOROS_MODEL"]),
     "code": str(SETTINGS_DEFAULTS["OUROBOROS_MODEL_CODE"]),
     "light": str(SETTINGS_DEFAULTS["OUROBOROS_MODEL_LIGHT"]),
     "fallback": str(SETTINGS_DEFAULTS["OUROBOROS_MODEL_FALLBACK"]),
 }
-_OPENAI_MODEL_DEFAULTS = dict(OPENAI_DIRECT_DEFAULTS)
+# Aliased names kept so the JS bootstrap shape stays stable for legacy
+# settings.json files mid-migration; all values point at Claude defaults.
+_OPENROUTER_MODEL_DEFAULTS = dict(_CLAUDE_OAUTH_MODEL_DEFAULTS)
+_OPENAI_MODEL_DEFAULTS = dict(_CLAUDE_OAUTH_MODEL_DEFAULTS)
 _ANTHROPIC_MODEL_DEFAULTS = dict(ANTHROPIC_DIRECT_DEFAULTS)
 _STEP_ORDER = ["providers", "models", "review_mode", "budget", "summary"]
 _LOCAL_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -49,15 +52,7 @@ _LOCAL_PRESETS: Dict[str, Dict[str, Any]] = {
 _MODEL_SUGGESTIONS = [
     "anthropic/claude-opus-4.6",
     "anthropic/claude-sonnet-4.6",
-    "anthropic::claude-opus-4-6",
-    "anthropic::claude-sonnet-4-6",
-    "google/gemini-3.1-pro-preview",
-    "google/gemini-3-flash-preview",
-    "openai/gpt-5.4",
-    "openai::gpt-5.4",
-    "openai::gpt-5.4-mini",
-    "openai-compatible::meta-llama/compatible",
-    "cloudru::giga-model",
+    "anthropic/claude-haiku-4.5",
 ]
 
 
@@ -101,21 +96,16 @@ def _detect_local_preset(settings: dict) -> str:
 
 
 def _derive_provider_profile(settings: dict) -> str:
-    has_openrouter = bool(_string(settings.get("OPENROUTER_API_KEY")))
-    has_openai = bool(_string(settings.get("OPENAI_API_KEY")))
+    has_oauth = bool(_string(settings.get("CLAUDE_CODE_OAUTH_TOKEN")))
     has_anthropic = bool(_string(settings.get("ANTHROPIC_API_KEY")))
     has_local = bool(_string(settings.get("LOCAL_MODEL_SOURCE")))
-    if has_openrouter:
-        return "openrouter"
-    if has_openai and has_anthropic:
-        return "direct-multi"
-    if has_openai:
-        return "openai"
+    if has_oauth:
+        return "claude_code_oauth"
     if has_anthropic:
         return "anthropic"
     if has_local:
         return "local"
-    return "openrouter"
+    return "claude_code_oauth"
 
 
 def _derive_local_routing_mode(settings: dict) -> str:
@@ -131,11 +121,8 @@ def _derive_local_routing_mode(settings: dict) -> str:
 
 
 def _initial_models(settings: dict, provider_profile: str) -> dict:
-    defaults = _OPENROUTER_MODEL_DEFAULTS
-    if provider_profile == "openai":
-        defaults = _OPENAI_MODEL_DEFAULTS
-    elif provider_profile == "anthropic":
-        defaults = _ANTHROPIC_MODEL_DEFAULTS
+    del provider_profile  # Only one cloud provider now.
+    defaults = _CLAUDE_OAUTH_MODEL_DEFAULTS
     return {
         "main": _string(settings.get("OUROBOROS_MODEL")) or defaults["main"],
         "code": _string(settings.get("OUROBOROS_MODEL_CODE")) or defaults["code"],
@@ -165,17 +152,15 @@ def _build_bootstrap(settings: dict, host_mode: str) -> dict:
         "supportsLocalRuntimeControls": host_mode == "web",
         "stepOrder": list(_STEP_ORDER),
         "modelDefaults": {
-            "openrouter": dict(_OPENROUTER_MODEL_DEFAULTS),
-            "openai": dict(_OPENAI_MODEL_DEFAULTS),
+            "claude_code_oauth": dict(_CLAUDE_OAUTH_MODEL_DEFAULTS),
             "anthropic": dict(_ANTHROPIC_MODEL_DEFAULTS),
-            "local": dict(_OPENROUTER_MODEL_DEFAULTS),
+            "local": dict(_CLAUDE_OAUTH_MODEL_DEFAULTS),
         },
         "localPresets": _bootstrap_local_presets(),
         "modelSuggestions": list(_MODEL_SUGGESTIONS),
         "initialState": {
             "providerProfile": provider_profile,
-            "openrouterKey": _string(settings.get("OPENROUTER_API_KEY")),
-            "openaiKey": _string(settings.get("OPENAI_API_KEY")),
+            "claudeOauthToken": _string(settings.get("CLAUDE_CODE_OAUTH_TOKEN")),
             "anthropicKey": _string(settings.get("ANTHROPIC_API_KEY")),
             "reviewEnforcement": _string(settings.get("OUROBOROS_REVIEW_ENFORCEMENT"))
             or str(SETTINGS_DEFAULTS["OUROBOROS_REVIEW_ENFORCEMENT"]),
@@ -220,8 +205,7 @@ def build_onboarding_html(settings: dict, host_mode: str = "desktop") -> str:
 
 
 def prepare_onboarding_settings(data: dict, current_settings: dict) -> Tuple[dict, str | None]:
-    openrouter_key = _string(data.get("OPENROUTER_API_KEY"))
-    openai_key = _string(data.get("OPENAI_API_KEY"))
+    claude_oauth_token = _string(data.get("CLAUDE_CODE_OAUTH_TOKEN"))
     anthropic_key = _string(data.get("ANTHROPIC_API_KEY"))
     local_source = _string(data.get("LOCAL_MODEL_SOURCE"))
     local_filename = _string(data.get("LOCAL_MODEL_FILENAME"))
@@ -229,16 +213,17 @@ def prepare_onboarding_settings(data: dict, current_settings: dict) -> Tuple[dic
     local_routing_mode = _string(data.get("LOCAL_ROUTING_MODE")) or "cloud"
     review_enforcement = _string(data.get("OUROBOROS_REVIEW_ENFORCEMENT")) or "advisory"
 
-    if openrouter_key and len(openrouter_key) < 10:
-        return {}, "OpenRouter API key looks too short."
-    if openai_key and len(openai_key) < 10:
-        return {}, "OpenAI API key looks too short."
+    if claude_oauth_token and len(claude_oauth_token) < 10:
+        return {}, "Claude OAuth subscription token looks too short."
     if anthropic_key and len(anthropic_key) < 10:
         return {}, "Anthropic API key looks too short."
 
     has_local = bool(local_source)
-    if not openrouter_key and not openai_key and not anthropic_key and not has_local:
-        return {}, "Configure OpenRouter, OpenAI, Anthropic, or a local model before continuing."
+    if not claude_oauth_token and not anthropic_key and not has_local:
+        return {}, (
+            "Configure a Claude OAuth subscription token (recommended), an "
+            "Anthropic API key, or a local model before continuing."
+        )
 
     if has_local and "/" in local_source and not local_source.startswith(("/", "~")) and not local_filename:
         return {}, "Local HuggingFace sources need a GGUF filename."
@@ -292,15 +277,14 @@ def prepare_onboarding_settings(data: dict, current_settings: dict) -> Tuple[dic
     }.get(local_routing_mode, (False, False, False, False))
     if not has_local:
         use_local = (False, False, False, False)
-    if has_local and not openrouter_key and not openai_key and not anthropic_key and not any(use_local):
+    if has_local and not claude_oauth_token and not anthropic_key and not any(use_local):
         return {}, "Local-only setups must route at least one model to the local runtime."
 
     prepared = dict(current_settings)
     prepared.update(models)
     prepared.update(
         {
-            "OPENROUTER_API_KEY": openrouter_key,
-            "OPENAI_API_KEY": openai_key,
+            "CLAUDE_CODE_OAUTH_TOKEN": claude_oauth_token,
             "ANTHROPIC_API_KEY": anthropic_key,
             "TOTAL_BUDGET": total_budget,
             "OUROBOROS_PER_TASK_COST_USD": per_task_cost,

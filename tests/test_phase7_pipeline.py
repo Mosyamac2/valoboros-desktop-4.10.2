@@ -260,7 +260,10 @@ class TestReviewQuorumLogic:
     def test_review_models_configured(self):
         from ouroboros.config import get_review_models
         models = get_review_models()
-        assert len(models) >= 2  # config.py is single source of truth
+        # Single-model review under BIBLE v5.1: one Anthropic id is the
+        # configured default and the runtime contract.
+        assert len(models) == 1
+        assert models[0].startswith("anthropic/")
 
     def test_checklist_path_exists(self):
         review = _get_review_module()

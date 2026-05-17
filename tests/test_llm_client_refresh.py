@@ -1,54 +1,47 @@
-import os
+"""LLMClient construction / refresh tests under the subscription backend.
+
+The legacy tests exercised OpenRouter API-key refresh on the OpenAI-compatible
+client. That client is gone (the cloud transport now delegates to
+``ouroboros.gateways.claude_code_chat``). What remains worth testing is that
+LLMClient is cheap to construct repeatedly and ignores legacy constructor
+kwargs.
+"""
+
+from __future__ import annotations
+
 import sys
 import types
 import unittest
-from unittest.mock import patch
 
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+def _install_mock_sdk():
+    if "claude_agent_sdk" not in sys.modules:
+        mock_sdk = types.ModuleType("claude_agent_sdk")
+        mock_sdk.ClaudeAgentOptions = type("ClaudeAgentOptions", (), {"__init__": lambda self, **kw: None})
+        mock_sdk.ClaudeSDKClient = type("ClaudeSDKClient", (), {})
+        mock_sdk.HookMatcher = type("HookMatcher", (), {"__init__": lambda self, **kw: None})
+        mock_sdk.AssistantMessage = type("AssistantMessage", (), {})
+        mock_sdk.ResultMessage = type("ResultMessage", (), {})
+        mock_sdk.UserMessage = type("UserMessage", (), {})
+
+        async def _empty_query(**_kw):
+            if False:
+                yield None
+        mock_sdk.query = _empty_query
+        sys.modules["claude_agent_sdk"] = mock_sdk
 
 
-class _FakeOpenAI:
-    created = []
-
-    def __init__(self, **kwargs):
-        self.kwargs = kwargs
-        type(self).created.append(self)
+_install_mock_sdk()
 
 
-class TestLlmClientRefresh(unittest.TestCase):
-    def setUp(self):
-        _FakeOpenAI.created.clear()
-
-    def test_runtime_client_refreshes_when_env_key_changes(self):
+class TestLlmClientLifecycle(unittest.TestCase):
+    def test_repeated_construction_is_safe(self):
         from ouroboros.llm import LLMClient
+        a, b = LLMClient(), LLMClient()
+        self.assertIsNotNone(a.default_model())
+        self.assertIsNotNone(b.default_model())
 
-        fake_openai = types.SimpleNamespace(OpenAI=_FakeOpenAI)
-        with patch.dict(sys.modules, {"openai": fake_openai}):
-            with patch.dict(os.environ, {"OPENROUTER_API_KEY": ""}, clear=False):
-                client = LLMClient()
-                first = client._get_client()
-
-            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-new-key"}, clear=False):
-                second = client._get_client()
-
-        self.assertIsNot(first, second)
-        self.assertEqual(len(_FakeOpenAI.created), 2)
-        self.assertEqual(_FakeOpenAI.created[0].kwargs["api_key"], "")
-        self.assertEqual(_FakeOpenAI.created[1].kwargs["api_key"], "sk-or-new-key")
-
-    def test_explicit_api_key_does_not_track_env_changes(self):
+    def test_constructor_ignores_legacy_kwargs(self):
         from ouroboros.llm import LLMClient
-
-        fake_openai = types.SimpleNamespace(OpenAI=_FakeOpenAI)
-        with patch.dict(sys.modules, {"openai": fake_openai}):
-            with patch.dict(os.environ, {"OPENROUTER_API_KEY": ""}, clear=False):
-                client = LLMClient(api_key="explicit-key")
-                first = client._get_client()
-
-            with patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-or-new-key"}, clear=False):
-                second = client._get_client()
-
-        self.assertIs(first, second)
-        self.assertEqual(len(_FakeOpenAI.created), 1)
-        self.assertEqual(_FakeOpenAI.created[0].kwargs["api_key"], "explicit-key")
+        client = LLMClient(api_key="legacy-ignored", base_url="legacy-ignored")
+        self.assertEqual(client.default_model(), client.default_model())

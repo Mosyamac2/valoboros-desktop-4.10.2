@@ -89,79 +89,26 @@ export function renderSettingsPage() {
                         <code>Clear</code> actions so masked values can be removed intentionally.
                     </div>
                     ${providerCard({
-                        id: 'openrouter',
-                        title: 'OpenRouter',
-                        icon: '/static/providers/openrouter.ico',
-                        hint: 'Default multi-model router',
+                        id: 'claude_code_oauth',
+                        title: 'Claude Code Subscription (recommended)',
+                        icon: '/static/providers/anthropic.png',
+                        hint: 'OAuth token from `claude setup-token` — flat-rate billing',
                         open: true,
-                        body: `<div class="form-row">${secretField({
-                            id: 's-openrouter',
-                            settingKey: 'OPENROUTER_API_KEY',
-                            label: 'OpenRouter API Key',
-                            placeholder: 'sk-or-...',
-                        })}</div>`,
-                    })}
-                    ${providerCard({
-                        id: 'openai',
-                        title: 'OpenAI',
-                        icon: '/static/providers/openai.svg',
-                        hint: 'Official OpenAI API',
                         body: `
                             <div class="form-row">${secretField({
-                                id: 's-openai',
-                                settingKey: 'OPENAI_API_KEY',
-                                label: 'OpenAI API Key',
-                                placeholder: 'sk-...',
+                                id: 's-claude-oauth-token',
+                                settingKey: 'CLAUDE_CODE_OAUTH_TOKEN',
+                                label: 'Claude OAuth subscription token',
+                                placeholder: 'sk-ant-oat01-...',
                             })}</div>
-                            <div class="settings-inline-note">Use model values like <code>openai::gpt-5.4</code> in the Models tab to route models directly here. If OpenRouter is absent and the shipped defaults are still untouched, Ouroboros auto-remaps them to official OpenAI defaults.</div>
-                        `,
-                    })}
-                    ${providerCard({
-                        id: 'compatible',
-                        title: 'OpenAI Compatible',
-                        icon: '/static/providers/openai-compatible.svg',
-                        hint: 'Custom OpenAI-style endpoint',
-                        body: `
-                            <div class="form-row">
-                                ${secretField({
-                                    id: 's-openai-compatible-key',
-                                    settingKey: 'OPENAI_COMPATIBLE_API_KEY',
-                                    label: 'API Key',
-                                    placeholder: 'Compatible provider key',
-                                })}
-                                <div class="form-field">
-                                    <label>Base URL</label>
-                                    <input id="s-openai-compatible-base-url" placeholder="https://provider.example/v1">
-                                </div>
-                            </div>
-                            <div class="settings-inline-note">Use this card for custom base URLs. Built-in web search only works with the official OpenAI Responses API, so keep <code>OPENAI_BASE_URL</code> empty when you want <code>web_search</code>.</div>
-                        `,
-                    })}
-                    ${providerCard({
-                        id: 'cloudru',
-                        title: 'Cloud.ru Foundation Models',
-                        icon: '/static/providers/cloudru.svg',
-                        hint: 'Cloud.ru OpenAI-compatible runtime',
-                        body: `
-                            <div class="form-row">
-                                ${secretField({
-                                    id: 's-cloudru-key',
-                                    settingKey: 'CLOUDRU_FOUNDATION_MODELS_API_KEY',
-                                    label: 'API Key',
-                                    placeholder: 'Cloud.ru Foundation Models API key',
-                                })}
-                                <div class="form-field">
-                                    <label>Base URL</label>
-                                    <input id="s-cloudru-base-url" placeholder="https://foundation-models.api.cloud.ru/v1">
-                                </div>
-                            </div>
+                            <div class="settings-inline-note">Generate with <code>claude setup-token</code>. When set, all cloud LLM traffic bills against your Pro/Max subscription. Ouroboros unsets <code>ANTHROPIC_API_KEY</code> in child processes so the CLI prefers subscription billing.</div>
                         `,
                     })}
                     ${providerCard({
                         id: 'anthropic',
-                        title: 'Anthropic',
+                        title: 'Anthropic API key (legacy)',
                         icon: '/static/providers/anthropic.png',
-                        hint: 'Direct runtime plus Claude tooling',
+                        hint: 'Per-token billing fallback',
                         body: `
                             <div class="form-row">${secretField({
                                 id: 's-anthropic',
@@ -169,7 +116,7 @@ export function renderSettingsPage() {
                                 label: 'Anthropic API Key',
                                 placeholder: 'sk-ant-...',
                             })}</div>
-                            <div class="settings-inline-note">Use model values like <code>anthropic::claude-sonnet-4-6</code> in the Models tab to route models directly through Anthropic. Claude tooling still reuses this key.</div>
+                            <div class="settings-inline-note">Used only when the OAuth subscription token is empty. Per-token billing — leave blank when the OAuth token is set.</div>
                             <div class="settings-toolbar" id="settings-claude-code-panel" hidden>
                                 <button type="button" class="settings-ghost-btn" id="btn-claude-code-install">Install Claude Code CLI</button>
                                 <span id="settings-claude-code-status" class="settings-inline-status">Claude Code CLI is not installed.</span>
@@ -361,8 +308,8 @@ export function renderSettingsPage() {
                         <div class="form-grid two">
                             <div class="form-field">
                                 <label>Web Search Model</label>
-                                <input id="s-websearch-model" placeholder="gpt-5.2">
-                                <div class="settings-inline-note">OpenAI model used by <code>web_search</code> when the official OpenAI Responses API is configured. This requires <code>OPENAI_API_KEY</code> and an empty <code>OPENAI_BASE_URL</code>.</div>
+                                <input id="s-websearch-model" placeholder="anthropic/claude-sonnet-4.6">
+                                <div class="settings-inline-note">Claude model used by <code>web_search</code> via the built-in Claude WebSearch tool. Bills against the OAuth subscription.</div>
                             </div>
                             <div class="form-field">
                                 <label>Review Enforcement</label>
@@ -373,17 +320,6 @@ export function renderSettingsPage() {
                                 <div class="settings-inline-note"><code>Advisory</code> keeps review visible but flexible. <code>Blocking</code> stops commits when critical review findings remain unresolved.</div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="form-section">
-                        <h3>Legacy Compatibility</h3>
-                        <div class="form-row">
-                            <div class="form-field">
-                                <label>Legacy OpenAI Base URL</label>
-                                <input id="s-openai-base-url" placeholder="https://api.openai.com/v1 or compatible endpoint">
-                            </div>
-                        </div>
-                        <div class="settings-inline-note">Backward-compatibility escape hatch for older installs. For new custom providers, use the dedicated <code>OpenAI Compatible</code> card instead.</div>
                     </div>
 
                     <div class="form-section danger">

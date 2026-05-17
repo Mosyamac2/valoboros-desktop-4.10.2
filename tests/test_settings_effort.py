@@ -48,11 +48,15 @@ def test_effort_defaults_in_config():
 
 
 def test_review_models_default_in_config():
-    """OUROBOROS_REVIEW_MODELS has a default value in config."""
+    """OUROBOROS_REVIEW_MODELS has a default value in config.
+
+    Single-model review under BIBLE v5.1: exactly one Claude id is enough.
+    """
     val = SETTINGS_DEFAULTS.get("OUROBOROS_REVIEW_MODELS", "")
     assert val  # non-empty
     models = [m.strip() for m in val.split(",") if m.strip()]
-    assert len(models) >= 2  # quorum requires at least 2
+    assert len(models) >= 1
+    assert all(m.startswith("anthropic/") for m in models)
 
 
 def test_review_enforcement_default_in_config():
@@ -67,98 +71,34 @@ def test_review_enforcement_default_in_config():
 def test_get_review_models_default(monkeypatch):
     """get_review_models() returns the config default when env is unset."""
     monkeypatch.delenv("OUROBOROS_REVIEW_MODELS", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
-    monkeypatch.delenv("CLOUDRU_FOUNDATION_MODELS_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     monkeypatch.delenv("OUROBOROS_MODEL", raising=False)
     models = get_review_models()
     assert isinstance(models, list)
-    assert len(models) >= 2
-    assert all("/" in m for m in models)  # valid OpenRouter model IDs
+    assert len(models) == 1
+    assert models[0].startswith("anthropic/")
 
 
 def test_get_review_models_custom(monkeypatch):
-    """get_review_models() returns custom models when env is set."""
+    """get_review_models() takes the first model from the configured list.
+
+    Multi-model review was collapsed to single-model in BIBLE v5.1; any
+    additional entries are ignored.
+    """
     monkeypatch.setenv("OUROBOROS_REVIEW_MODELS", "a/b,c/d")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
-    monkeypatch.delenv("CLOUDRU_FOUNDATION_MODELS_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("OUROBOROS_MODEL", raising=False)
     models = get_review_models()
-    assert models == ["a/b", "c/d"]
+    assert models == ["a/b"]
 
 
 def test_get_review_models_empty_env_falls_back_to_default(monkeypatch):
-    """get_review_models() falls back to default when env is empty string."""
+    """Empty env falls back to the default single-model id."""
     monkeypatch.setenv("OUROBOROS_REVIEW_MODELS", "")
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
-    monkeypatch.delenv("CLOUDRU_FOUNDATION_MODELS_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OUROBOROS_MODEL", raising=False)
     models = get_review_models()
-    # Must return the default, not an empty list
-    assert len(models) >= 2
-    assert models == [m.strip() for m in SETTINGS_DEFAULTS["OUROBOROS_REVIEW_MODELS"].split(",") if m.strip()]
-
-
-def test_get_review_models_falls_back_to_main_in_openai_only_mode(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
-    monkeypatch.delenv("CLOUDRU_FOUNDATION_MODELS_API_KEY", raising=False)
-    monkeypatch.setenv("OUROBOROS_MODEL", "openai::gpt-5.4")
-    monkeypatch.setenv(
-        "OUROBOROS_REVIEW_MODELS",
-        "openai/gpt-5.4,google/gemini-3.1-pro-preview,anthropic/claude-opus-4.6",
-    )
-
-    models = get_review_models()
-
-    assert models == ["openai::gpt-5.4", "openai::gpt-5.4", "openai::gpt-5.4"]
-
-
-def test_get_review_models_preserves_explicit_official_openai_list(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
-    monkeypatch.delenv("CLOUDRU_FOUNDATION_MODELS_API_KEY", raising=False)
-    monkeypatch.setenv("OUROBOROS_MODEL", "openai::gpt-5.4")
-    monkeypatch.setenv("OUROBOROS_REVIEW_MODELS", "openai/gpt-5.4,openai/gpt-4.1")
-
-    models = get_review_models()
-
-    assert models == ["openai::gpt-5.4", "openai::gpt-4.1"]
-
-
-def test_get_review_models_falls_back_to_main_in_anthropic_only_mode(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant")
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
-    monkeypatch.delenv("CLOUDRU_FOUNDATION_MODELS_API_KEY", raising=False)
-    monkeypatch.setenv("OUROBOROS_MODEL", "anthropic::claude-opus-4-6")
-    monkeypatch.setenv(
-        "OUROBOROS_REVIEW_MODELS",
-        "openai/gpt-5.4,google/gemini-3.1-pro-preview,anthropic/claude-opus-4.6",
-    )
-
-    models = get_review_models()
-
-    assert models == ["anthropic::claude-opus-4-6"] * 3
+    assert len(models) == 1
+    expected_default = [m.strip() for m in SETTINGS_DEFAULTS["OUROBOROS_REVIEW_MODELS"].split(",") if m.strip()][:1]
+    assert models == expected_default
 
 
 def test_get_review_enforcement_default(monkeypatch):
@@ -183,14 +123,11 @@ def test_get_review_enforcement_invalid_falls_back(monkeypatch):
 
 def test_apply_settings_clears_review_models_restores_default(monkeypatch):
     """Clearing OUROBOROS_REVIEW_MODELS in settings restores the default in env."""
-    # Simulate user clearing the field in Settings UI (empty string)
     settings = {"OUROBOROS_REVIEW_MODELS": ""}
     apply_settings_to_env(settings)
-    # env var should be the default, not empty
     env_val = os.environ.get("OUROBOROS_REVIEW_MODELS", "")
     assert env_val == SETTINGS_DEFAULTS["OUROBOROS_REVIEW_MODELS"]
-    # get_review_models() should also return correct defaults
-    assert len(get_review_models()) >= 2
+    assert len(get_review_models()) == 1
 
 
 def test_apply_settings_clears_review_enforcement_restores_default(monkeypatch):

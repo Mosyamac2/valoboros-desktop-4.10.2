@@ -16,7 +16,6 @@ from typing import Optional
 
 from ouroboros.compat import pid_lock_acquire as _compat_pid_lock_acquire
 from ouroboros.compat import pid_lock_release as _compat_pid_lock_release
-from ouroboros.provider_models import migrate_model_value
 
 
 # ---------------------------------------------------------------------------
@@ -39,14 +38,13 @@ AGENT_SERVER_PORT = 8765
 # Settings defaults
 # ---------------------------------------------------------------------------
 SETTINGS_DEFAULTS = {
-    "OPENROUTER_API_KEY": "",
-    "OPENAI_API_KEY": "",
-    "OPENAI_BASE_URL": "",
-    "OPENAI_COMPATIBLE_API_KEY": "",
-    "OPENAI_COMPATIBLE_BASE_URL": "",
-    "CLOUDRU_FOUNDATION_MODELS_API_KEY": "",
-    "CLOUDRU_FOUNDATION_MODELS_BASE_URL": "https://foundation-models.api.cloud.ru/v1",
+    # --- Subscription auth (single cloud backend) ---
+    "CLAUDE_CODE_OAUTH_TOKEN": "",
+    "OUROBOROS_LLM_BACKEND": "claude_code_oauth",  # claude_code_oauth | local
+    # Legacy Anthropic API key kept for backwards-compat only (per-token billing).
+    # When CLAUDE_CODE_OAUTH_TOKEN is set, this is unset for child processes.
     "ANTHROPIC_API_KEY": "",
+
     "TELEGRAM_BOT_TOKEN": "",
     "TELEGRAM_CHAT_ID": "",
 
@@ -57,6 +55,8 @@ SETTINGS_DEFAULTS = {
     "OUROBOROS_MODEL_FALLBACK": "anthropic/claude-sonnet-4.6",
     "CLAUDE_CODE_MODEL": "opus",
     "OUROBOROS_MAX_WORKERS": 5,
+    # Budget knobs kept for compatibility — under OAuth, cost is always 0
+    # and the effective gate is subscription rate limits, not dollars.
     "TOTAL_BUDGET": 10.0,
     "OUROBOROS_PER_TASK_COST_USD": 20.0,
     "OUROBOROS_SOFT_TIMEOUT_SEC": 600,
@@ -66,9 +66,9 @@ SETTINGS_DEFAULTS = {
     "OUROBOROS_BG_WAKEUP_MIN": 30,
     "OUROBOROS_BG_WAKEUP_MAX": 7200,
     "OUROBOROS_EVO_COST_THRESHOLD": 0.10,
-    "OUROBOROS_WEBSEARCH_MODEL": "gpt-5.2",
-    # Pre-commit review: comma-separated provider-tagged model list
-    "OUROBOROS_REVIEW_MODELS": "openai/gpt-5.4,google/gemini-3.1-pro-preview,anthropic/claude-opus-4.6",
+    "OUROBOROS_WEBSEARCH_MODEL": "anthropic/claude-sonnet-4.6",
+    # Pre-commit review is now single-model (subscription-only — no diversity).
+    "OUROBOROS_REVIEW_MODELS": "anthropic/claude-opus-4.6",
     # Pre-commit review enforcement: advisory | blocking
     "OUROBOROS_REVIEW_ENFORCEMENT": "advisory",
     # Scope review: single-model blocking reviewer (runs after triad review)
@@ -124,27 +124,19 @@ SETTINGS_DEFAULTS = {
 }
 
 _VALID_EFFORTS = ("none", "low", "medium", "high")
-_DIRECT_PROVIDER_REVIEW_RUNS = 3
 
 
 def _parse_model_list(value: str) -> list[str]:
     return [item.strip() for item in str(value or "").split(",") if item.strip()]
 
 
-def _exclusive_direct_remote_provider_env() -> str:
-    has_openrouter = bool(str(os.environ.get("OPENROUTER_API_KEY", "") or "").strip())
-    has_openai = bool(str(os.environ.get("OPENAI_API_KEY", "") or "").strip())
-    has_anthropic = bool(str(os.environ.get("ANTHROPIC_API_KEY", "") or "").strip())
-    has_legacy_base = bool(str(os.environ.get("OPENAI_BASE_URL", "") or "").strip())
-    has_compatible = bool(str(os.environ.get("OPENAI_COMPATIBLE_API_KEY", "") or "").strip())
-    has_cloudru = bool(str(os.environ.get("CLOUDRU_FOUNDATION_MODELS_API_KEY", "") or "").strip())
-    if has_openrouter or has_legacy_base or has_compatible or has_cloudru:
-        return ""
-    if has_openai and not has_anthropic:
-        return "openai"
-    if has_anthropic and not has_openai:
-        return "anthropic"
-    return ""
+def have_cloud_auth() -> bool:
+    """True when an Anthropic subscription token or legacy API key is set."""
+    if str(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "") or "").strip():
+        return True
+    if str(os.environ.get("ANTHROPIC_API_KEY", "") or "").strip():
+        return True
+    return False
 
 
 def resolve_effort(task_type: str) -> str:
@@ -173,24 +165,18 @@ def resolve_effort(task_type: str) -> str:
 
 
 def get_review_models() -> list[str]:
-    """Return the configured pre-commit review model list."""
+    """Return the configured pre-commit review model list.
+
+    Single-model review (subscription-only). Returns one Claude model id.
+    Kept as a list for compatibility with `multi_model_review` callers that
+    iterate over the result.
+    """
     default_str = SETTINGS_DEFAULTS["OUROBOROS_REVIEW_MODELS"]
     models_str = os.environ.get("OUROBOROS_REVIEW_MODELS", default_str) or default_str
     models = _parse_model_list(models_str)
-    provider = _exclusive_direct_remote_provider_env()
-    if not provider:
-        return models
-
-    main_model = str(os.environ.get("OUROBOROS_MODEL", SETTINGS_DEFAULTS["OUROBOROS_MODEL"]) or "").strip()
-    main_model = migrate_model_value(provider, main_model)
-    provider_prefix = f"{provider}::"
-    if not main_model.startswith(provider_prefix):
-        return models
-
-    migrated = [migrate_model_value(provider, model) for model in models]
-    if not migrated or len(migrated) < 2 or any(not model.startswith(provider_prefix) for model in migrated):
-        return [main_model] * _DIRECT_PROVIDER_REVIEW_RUNS
-    return migrated
+    if not models:
+        return [str(SETTINGS_DEFAULTS["OUROBOROS_REVIEW_MODELS"])]
+    return [models[0]]
 
 
 def get_review_enforcement() -> str:
@@ -318,9 +304,7 @@ def save_settings(settings: dict) -> None:
 def apply_settings_to_env(settings: dict) -> None:
     """Push settings into environment variables for supervisor modules."""
     env_keys = [
-        "OPENROUTER_API_KEY", "OPENAI_API_KEY", "OPENAI_BASE_URL",
-        "OPENAI_COMPATIBLE_API_KEY", "OPENAI_COMPATIBLE_BASE_URL",
-        "CLOUDRU_FOUNDATION_MODELS_API_KEY", "CLOUDRU_FOUNDATION_MODELS_BASE_URL",
+        "CLAUDE_CODE_OAUTH_TOKEN", "OUROBOROS_LLM_BACKEND",
         "ANTHROPIC_API_KEY",
         "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID",
         "OUROBOROS_NETWORK_PASSWORD",
@@ -351,6 +335,10 @@ def apply_settings_to_env(settings: dict) -> None:
         os.environ["OUROBOROS_REVIEW_MODELS"] = str(SETTINGS_DEFAULTS["OUROBOROS_REVIEW_MODELS"])
     if not os.environ.get("OUROBOROS_REVIEW_ENFORCEMENT"):
         os.environ["OUROBOROS_REVIEW_ENFORCEMENT"] = str(SETTINGS_DEFAULTS["OUROBOROS_REVIEW_ENFORCEMENT"])
+    # When OAuth subscription is the auth source, clear ANTHROPIC_API_KEY so
+    # the Claude CLI/SDK uses subscription billing instead of API-key billing.
+    if (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "") or "").strip():
+        os.environ.pop("ANTHROPIC_API_KEY", None)
 
 
 # ---------------------------------------------------------------------------

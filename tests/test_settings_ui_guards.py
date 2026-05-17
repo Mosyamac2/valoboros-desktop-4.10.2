@@ -42,7 +42,9 @@ class TestSettingsUiGuards(unittest.TestCase):
         source = self._read_settings_sources()["settings_ui"]
         self.assertIn("Adds a password wall only for non-localhost app and API access.", source)
         self.assertIn("keeps review visible but flexible", source)
-        self.assertIn("Backward-compatibility escape hatch for older installs.", source)
+        # The "Legacy OpenAI Base URL" section was removed in BIBLE v5.1
+        # (subscription-only backend). The explainer assertion that referenced
+        # its inline note is dropped accordingly.
 
     def test_advanced_settings_expose_websearch_and_task_cap(self):
         source = self._read_settings_sources()["settings_ui"]

@@ -484,7 +484,46 @@ backward compatibility but is not the runtime authority.
   still running" states for commit operations.
 - Context compaction kicks in after round 8 (summarizes old tool results)
 
-### Claude Agent SDK gateway (gateways/claude_code.py)
+### Cloud LLM transport (v4.11.0 OAuth migration)
+
+- **Single cloud backend:** the Anthropic subscription via
+  `claude-agent-sdk` and `CLAUDE_CODE_OAUTH_TOKEN`. Per-token providers
+  (OpenRouter / direct OpenAI / direct Anthropic / Cloud.ru /
+  openai-compatible) were removed in BIBLE v5.1 (2026-05-17).
+- **Two gateways:**
+  - `ouroboros/gateways/claude_code_chat.py` — chat-completions adapter
+    implementing `chat()` / `chat_async()` / `vision_query()` /
+    `web_search()`. Tool calls are emulated via prompt injection
+    (`<tool_call>{...}</tool_call>` blocks parsed back into OpenAI-shaped
+    tool_calls). Subscription billing returns `cost=0`; the SDK's
+    `total_cost_usd` is recorded as `notional_cost`.
+  - `ouroboros/gateways/claude_code.py` — agent-mode transport used by
+    `claude_code_edit` (Edit/Write delegation with PreToolUse hooks) and
+    `advisory_pre_review` (read-only Read/Grep/Glob review).
+- **`ouroboros/llm.py`** is a thin facade. It delegates cloud calls to
+  the chat gateway and keeps the local llama-cpp-python path for offline
+  fallback. `LLMClient(api_key=..., base_url=...)` constructor args are
+  retained but ignored.
+- **Auth precedence:** if `CLAUDE_CODE_OAUTH_TOKEN` is set, child
+  processes have `ANTHROPIC_API_KEY` removed from their env so the CLI
+  uses subscription billing (the CLI otherwise prefers API-key billing).
+- **Tool execution remains the outer loop's job.** The chat gateway runs
+  one-shot SDK queries with `allowed_tools=[]` (the SDK is not allowed to
+  invoke its own tools), so the existing `loop_tool_execution.py`
+  dispatch, safety supervisor, context compaction, and event emission
+  all operate unchanged. The new piece is just the inference primitive.
+- **Single-model review:** `OUROBOROS_REVIEW_MODELS` collapses to a
+  single Claude id (default `anthropic/claude-opus-4.6`). Cross-family
+  reviewer diversity was retired; rigor lives in the structured
+  checklist, the advisory pre-review pass, and the scope review pass.
+- **WebSearch:** `tools/search.py` calls `claude-agent-sdk` with
+  `allowed_tools=["WebSearch"]`. The OpenAI Responses API path is gone.
+- **Rate-limit policy:** subscription 429s surface as task errors and
+  pause autonomous evolution until the next refill window. No automatic
+  local-model failover by default; users can set `USE_LOCAL_*=true` to
+  opt into manual local-model routing.
+
+### Claude Agent SDK delegation gateway (gateways/claude_code.py)
 
 - **Pure transport adapter** for delegated code editing and advisory review
 - Wraps the `claude-agent-sdk` Python package (`ClaudeSDKClient` with async message stream)

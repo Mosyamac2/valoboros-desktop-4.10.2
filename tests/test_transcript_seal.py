@@ -191,27 +191,12 @@ def test_strip_cache_control_flattens_tool_role_list_to_string():
     assert "cache_control" not in cleaned[1]["content"][0]
 
 
-def test_anthropic_messages_pass_through_list_content_for_tool_result():
-    """_build_anthropic_messages preserves list content for tool_result (Anthropic supports blocks)."""
-    from ouroboros.llm import LLMClient
-    client = LLMClient()
-    sealed_content = [{"type": "text", "text": "sealed data", "cache_control": {"type": "ephemeral"}}]
-    messages = [
-        {"role": "user", "content": "start"},
-        {"role": "assistant", "content": None, "tool_calls": [{
-            "id": "tc1",
-            "type": "function",
-            "function": {"name": "my_tool", "arguments": "{}"},
-        }]},
-        {"role": "tool", "tool_call_id": "tc1", "content": sealed_content},
-    ]
-    _, anthropic_msgs = client._build_anthropic_messages(messages)
-    # The last user block should contain a tool_result with list content
-    last_user = next(m for m in reversed(anthropic_msgs) if m["role"] == "user")
-    tool_result_block = next(
-        b for b in last_user["content"] if b.get("type") == "tool_result"
-    )
-    assert tool_result_block["content"] == sealed_content
+# test_anthropic_messages_pass_through_list_content_for_tool_result
+# removed in BIBLE v5.1: the direct-Anthropic API path (`_build_anthropic_messages`)
+# was deleted from llm.py when per-token providers were retired. The cloud
+# backend (claude-agent-sdk) handles its own message serialization and accepts
+# sealed list content transparently — verified end-to-end by the gateway
+# adapter tests in test_claude_code_chat_adapter.py.
 
 
 def test_compaction_receives_plain_strings():

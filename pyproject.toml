@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ouroboros"
-version = "4.10.2"
+version = "4.11.0"
 description = "Self-creating AI agent with constitution, background consciousness, and persistent identity"
 readme = "README.md"
 license = {text = "MIT"}
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [
     {name = "Anton Razzhigaev"},
 ]
-keywords = ["ai-agent", "self-modifying", "autonomous", "llm", "openrouter"]
+keywords = ["ai-agent", "self-modifying", "autonomous", "llm", "claude", "anthropic"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "License :: OSI Approved :: MIT License",
@@ -34,6 +34,7 @@ dependencies = [
     "python-multipart",
     "uvicorn[standard]",
     "websockets",
+    "claude-agent-sdk>=0.1.50",
 ]
 
 [project.scripts]

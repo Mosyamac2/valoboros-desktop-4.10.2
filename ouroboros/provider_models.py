@@ -1,19 +1,29 @@
-"""Provider-specific model ID helpers and direct-provider defaults."""
+"""Model identifier normalization for the subscription-only backend.
+
+After the OAuth migration the only cloud provider is Anthropic (via Claude
+Code subscription). This module is a small shim that keeps the public
+``normalize_model_identity`` function used by ``pricing.py`` and a few
+defaults still referenced by the onboarding wizard.
+"""
 
 from __future__ import annotations
 
-OPENAI_DIRECT_DEFAULTS = {
-    "main": "openai::gpt-5.4",
-    "code": "openai::gpt-5.4",
-    "light": "openai::gpt-5.4-mini",
-    "fallback": "openai::gpt-5.4-mini",
-}
 
 ANTHROPIC_DIRECT_DEFAULTS = {
-    "main": "anthropic::claude-opus-4-6",
-    "code": "anthropic::claude-opus-4-6",
-    "light": "anthropic::claude-sonnet-4-6",
-    "fallback": "anthropic::claude-sonnet-4-6",
+    "main": "anthropic/claude-opus-4.6",
+    "code": "anthropic/claude-opus-4.6",
+    "light": "anthropic/claude-sonnet-4.6",
+    "fallback": "anthropic/claude-sonnet-4.6",
+}
+
+# Retained for onboarding_wizard's bootstrap until it's fully rewritten;
+# the OpenAI defaults are no longer reachable but the constant import would
+# break older settings.json restores otherwise.
+OPENAI_DIRECT_DEFAULTS = {
+    "main": "anthropic/claude-opus-4.6",
+    "code": "anthropic/claude-opus-4.6",
+    "light": "anthropic/claude-sonnet-4.6",
+    "fallback": "anthropic/claude-sonnet-4.6",
 }
 
 _ANTHROPIC_MODEL_ALIASES = {
@@ -28,30 +38,17 @@ def normalize_anthropic_model_id(model_id: str) -> str:
 
 
 def migrate_model_value(provider: str, value: str) -> str:
-    text = str(value or "").strip()
-    if provider == "openai":
-        if text.startswith("openai/"):
-            return f"openai::{text[len('openai/'):]}"
-        return text
-    if provider == "anthropic":
-        if text.startswith("anthropic::"):
-            return f"anthropic::{normalize_anthropic_model_id(text[len('anthropic::'):])}"
-        if text.startswith("anthropic/"):
-            return f"anthropic::{normalize_anthropic_model_id(text[len('anthropic/'):])}"
-        return text
-    return text
+    """Legacy helper. Under OAuth there is one provider; the value is returned
+    as-is. Kept callable for backwards-compatible callers.
+    """
+    del provider
+    return str(value or "").strip()
 
 
 def normalize_model_identity(model: str) -> str:
     text = str(model or "").strip()
     if text.endswith(" (local)"):
         text = text[:-8]
-    if text.startswith("openai::"):
-        return f"openai/{text[len('openai::'):]}"
-    if text.startswith("openai-compatible::"):
-        return f"openai-compatible/{text[len('openai-compatible::'):]}"
-    if text.startswith("cloudru::"):
-        return f"cloudru/{text[len('cloudru::'):]}"
     if text.startswith("anthropic::"):
         return f"anthropic/{normalize_anthropic_model_id(text[len('anthropic::'):])}"
     if text.startswith("anthropic/"):

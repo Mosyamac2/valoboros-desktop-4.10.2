@@ -1,8 +1,8 @@
 # CLAUDE.md — Ouroboros (Valoboros) — Self-Evolving ML Model Validation Platform
 
-**Upstream:** [joi-lab/ouroboros-desktop](https://github.com/joi-lab/ouroboros-desktop) — base codebase v4.10.2
-**Status:** Valoboros validation platform **fully implemented** — 28 validation modules, 22 tools, 9 seed checks, 4 API endpoints, web UI tab, Docker deployment, 139+ validation-specific tests.
-**Constitution:** BIBLE.md v5.0 — Mission: detect real problems, provide feasible recommendations, continuously grow as a validation expert.
+**Upstream:** [joi-lab/ouroboros-desktop](https://github.com/joi-lab/ouroboros-desktop) — base codebase v4.11.0
+**Status:** Valoboros validation platform **fully implemented** — 28 validation modules, 22 tools, 9 seed checks, 4 API endpoints, web UI tab, Docker deployment, 139+ validation-specific tests. **Subscription LLM backend** since v4.11.0.
+**Constitution:** BIBLE.md v5.1 — Mission: detect real problems, provide feasible recommendations, continuously grow as a validation expert.
 
 ---
 
@@ -329,7 +329,7 @@ These are the unique self-improvement infrastructure. Removing any one degrades 
 3. **Identity persistence** — `identity.md` accumulates self-knowledge across restarts
 4. **Pattern register** — `knowledge/patterns.md` for systematic error analysis
 5. **Knowledge base** — growing domain knowledge in `knowledge/` with auto-index
-6. **Multi-model review** — 2–3 models from different families cross-check every commit
+6. **Single-model structured review** — one Claude reviewer evaluates every commit against `docs/CHECKLISTS.md`. Diversity across model families was removed in BIBLE v5.1 (2026-05-17) when the cloud backend became the Anthropic subscription; the rigor budget now lives in the checklist, the advisory pre-review pass, and the scope review pass
 7. **Task reflections** — 150–250 word LLM reflection after errors, last 10 loaded into context
 8. **Scratchpad** — FIFO working memory (max 10 blocks) with eviction to journal
 9. **Git versioning** — full traceability, branches (ouroboros / ouroboros-stable / main)
@@ -526,15 +526,17 @@ All from `ouroboros/config.py` → `SETTINGS_DEFAULTS`. Override via env vars or
 | Light model | `anthropic/claude-sonnet-4.6` | `OUROBOROS_MODEL_LIGHT` |
 | Fallback | `anthropic/claude-sonnet-4.6` | `OUROBOROS_MODEL_FALLBACK` |
 | Claude Code model | `opus` | `CLAUDE_CODE_MODEL` |
-| Web search model | `gpt-5.2` | `OUROBOROS_WEBSEARCH_MODEL` |
-| Total budget | `$10` | `TOTAL_BUDGET` |
-| Per-task cost cap | `$20` | `OUROBOROS_PER_TASK_COST_USD` |
+| Subscription token | _(required)_ | `CLAUDE_CODE_OAUTH_TOKEN` |
+| LLM backend | `claude_code_oauth` | `OUROBOROS_LLM_BACKEND` |
+| Web search model | `anthropic/claude-sonnet-4.6` | `OUROBOROS_WEBSEARCH_MODEL` |
+| Total budget | `$10` (notional under OAuth) | `TOTAL_BUDGET` |
+| Per-task cost cap | `$20` (notional under OAuth) | `OUROBOROS_PER_TASK_COST_USD` |
 | Soft timeout | `600s` | `OUROBOROS_SOFT_TIMEOUT_SEC` |
 | Hard timeout | `1800s` | `OUROBOROS_HARD_TIMEOUT_SEC` |
 | Tool timeout | `600s` | `OUROBOROS_TOOL_TIMEOUT_SEC` |
 | Max workers | `5` | `OUROBOROS_MAX_WORKERS` |
 | Review enforcement | `advisory` | `OUROBOROS_REVIEW_ENFORCEMENT` |
-| Review models | `openai/gpt-5.4, gemini-3.1-pro-preview, claude-opus-4.6` | `OUROBOROS_REVIEW_MODELS` |
+| Review model (single) | `anthropic/claude-opus-4.6` | `OUROBOROS_REVIEW_MODELS` |
 | Scope review model | `anthropic/claude-opus-4.6` | `OUROBOROS_SCOPE_REVIEW_MODEL` |
 | BG wakeup range | `30–7200s` | `OUROBOROS_BG_WAKEUP_MIN` / `_MAX` |
 | BG max rounds | `5` | `OUROBOROS_BG_MAX_ROUNDS` |

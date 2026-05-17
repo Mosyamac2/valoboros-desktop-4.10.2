@@ -70,12 +70,19 @@ export function initSettings({ state }) {
     let claudeCodePollStarted = false;
 
     function anthropicKeyConfigured() {
-        const input = byId('s-anthropic');
-        if (!input) return Boolean(String(currentSettings.ANTHROPIC_API_KEY || '').trim());
-        if (input.dataset.forceClear === '1') return false;
-        const liveValue = String(input.value || '').trim();
-        if (liveValue) return true;
-        return Boolean(String(currentSettings.ANTHROPIC_API_KEY || '').trim());
+        // Returns true when either the OAuth subscription token or the legacy
+        // Anthropic API key is configured. Used to decide whether to surface
+        // the Claude Code CLI install panel.
+        function _has(id, settingsKey) {
+            const input = byId(id);
+            const settingsValue = String(currentSettings[settingsKey] || '').trim();
+            if (!input) return Boolean(settingsValue);
+            if (input.dataset.forceClear === '1') return false;
+            const liveValue = String(input.value || '').trim();
+            return Boolean(liveValue || settingsValue);
+        }
+        return _has('s-claude-oauth-token', 'CLAUDE_CODE_OAUTH_TOKEN')
+            || _has('s-anthropic', 'ANTHROPIC_API_KEY');
     }
 
     function renderClaudeCodeUi() {
@@ -143,13 +150,7 @@ export function initSettings({ state }) {
     }
 
     function applySettings(s) {
-        applyInputValue('s-openrouter', s.OPENROUTER_API_KEY);
-        applyInputValue('s-openai', s.OPENAI_API_KEY);
-        applyInputValue('s-openai-base-url', s.OPENAI_BASE_URL);
-        applyInputValue('s-openai-compatible-key', s.OPENAI_COMPATIBLE_API_KEY);
-        applyInputValue('s-openai-compatible-base-url', s.OPENAI_COMPATIBLE_BASE_URL);
-        applyInputValue('s-cloudru-key', s.CLOUDRU_FOUNDATION_MODELS_API_KEY);
-        applyInputValue('s-cloudru-base-url', s.CLOUDRU_FOUNDATION_MODELS_BASE_URL);
+        applyInputValue('s-claude-oauth-token', s.CLAUDE_CODE_OAUTH_TOKEN);
         applyInputValue('s-anthropic', s.ANTHROPIC_API_KEY);
         applyInputValue('s-network-password', s.OUROBOROS_NETWORK_PASSWORD);
         applyInputValue('s-telegram-token', s.TELEGRAM_BOT_TOKEN);
@@ -239,16 +240,10 @@ export function initSettings({ state }) {
             USE_LOCAL_CODE: byId('s-local-code').checked,
             USE_LOCAL_LIGHT: byId('s-local-light').checked,
             USE_LOCAL_FALLBACK: byId('s-local-fallback').checked,
-            OPENAI_BASE_URL: byId('s-openai-base-url').value.trim(),
-            OPENAI_COMPATIBLE_BASE_URL: byId('s-openai-compatible-base-url').value.trim(),
-            CLOUDRU_FOUNDATION_MODELS_BASE_URL: byId('s-cloudru-base-url').value.trim(),
             TELEGRAM_CHAT_ID: byId('s-telegram-chat-id').value.trim(),
         };
 
-        collectSecretValue('s-openrouter', body);
-        collectSecretValue('s-openai', body);
-        collectSecretValue('s-openai-compatible-key', body);
-        collectSecretValue('s-cloudru-key', body);
+        collectSecretValue('s-claude-oauth-token', body);
         collectSecretValue('s-anthropic', body);
         collectSecretValue('s-network-password', body);
         collectSecretValue('s-telegram-token', body);
@@ -261,16 +256,23 @@ export function initSettings({ state }) {
         .then(() => refreshModelCatalog())
         .catch(() => {});
 
-    byId('s-anthropic')?.addEventListener('input', () => {
-        renderClaudeCodeUi();
-        if (anthropicKeyConfigured()) {
-            startClaudeCodePolling();
-            refreshClaudeCodeStatus();
-        }
-    });
+    function _hookClaudeAuthInput(id) {
+        byId(id)?.addEventListener('input', () => {
+            renderClaudeCodeUi();
+            if (anthropicKeyConfigured()) {
+                startClaudeCodePolling();
+                refreshClaudeCodeStatus();
+            }
+        });
+    }
+    _hookClaudeAuthInput('s-claude-oauth-token');
+    _hookClaudeAuthInput('s-anthropic');
 
     page.addEventListener('click', (event) => {
-        if (event.target.closest('.secret-clear[data-target="s-anthropic"]')) {
+        if (
+            event.target.closest('.secret-clear[data-target="s-anthropic"]')
+            || event.target.closest('.secret-clear[data-target="s-claude-oauth-token"]')
+        ) {
             queueMicrotask(() => {
                 renderClaudeCodeUi();
                 refreshClaudeCodeStatus();
@@ -310,18 +312,12 @@ export function initSettings({ state }) {
     byId('btn-save-settings').addEventListener('click', async () => {
         const body = collectBody();
         const restartSensitiveKeys = [
-            'OPENROUTER_API_KEY',
-            'OPENAI_API_KEY',
+            'CLAUDE_CODE_OAUTH_TOKEN',
             'ANTHROPIC_API_KEY',
-            'OPENAI_COMPATIBLE_API_KEY',
-            'CLOUDRU_FOUNDATION_MODELS_API_KEY',
             'TELEGRAM_BOT_TOKEN',
             'LOCAL_MODEL_SOURCE',
             'LOCAL_MODEL_FILENAME',
             'LOCAL_MODEL_PORT',
-            'OPENAI_BASE_URL',
-            'OPENAI_COMPATIBLE_BASE_URL',
-            'CLOUDRU_FOUNDATION_MODELS_BASE_URL',
         ];
         const restartHint = restartSensitiveKeys.some((key) => {
             if (!Object.prototype.hasOwnProperty.call(body, key)) return false;

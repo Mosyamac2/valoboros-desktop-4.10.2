@@ -1,8 +1,10 @@
-"""Multi-model review — sends code/text to multiple LLMs for consensus review.
+"""Single-model pre-commit review.
 
-Also contains the unified pre-commit review gate: three models review staged
-diffs against docs/CHECKLISTS.md before any repo_commit. Review always runs
-before commit; enforcement is configurable between blocking and advisory.
+After the OAuth migration the cloud backend is the Anthropic subscription,
+so per-call multi-family diversity is no longer available. Review now runs
+against a single Claude model. The tool name `multi_model_review` is kept
+for backwards compatibility but functionally collapses to one call. Models
+passed in the list are deduplicated to the first entry.
 
 BIBLE.md is automatically injected as constitutional context with top priority.
 """
@@ -22,8 +24,8 @@ from ouroboros.tools.registry import ToolEntry, ToolContext
 
 log = logging.getLogger(__name__)
 
-MAX_MODELS = 10
-CONCURRENCY_LIMIT = 5
+MAX_MODELS = 1
+CONCURRENCY_LIMIT = 1
 
 _CONSTITUTIONAL_PREAMBLE = """\
 ## CONSTITUTIONAL CONTEXT — TOP PRIORITY
@@ -86,10 +88,13 @@ def get_tools():
             schema={
                 "name": "multi_model_review",
                 "description": (
-                    "Send code or text to multiple LLM models for review/consensus. "
-                    "Each model reviews independently. Returns structured verdicts. "
-                    "Choose diverse models yourself. Budget is tracked automatically. "
-                    "BIBLE.md (Constitution) is automatically included as top-priority context."
+                    "Send code or text to Claude for structured review. Returns a "
+                    "single reviewer verdict in the same shape as the legacy "
+                    "multi-model review (one-element results list). After the "
+                    "OAuth subscription migration, reviewer diversity across "
+                    "model families is no longer available; the tool name is "
+                    "retained for compatibility. BIBLE.md (Constitution) is "
+                    "automatically included as top-priority context."
                 ),
                 "parameters": {
                     "type": "object",
@@ -98,7 +103,7 @@ def get_tools():
                         "prompt": {"type": "string", "description": "Review instructions — what to check for."},
                         "models": {
                             "type": "array", "items": {"type": "string"},
-                            "description": "OpenRouter model identifiers (e.g. 3 diverse models)",
+                            "description": "Claude model id(s). Only the first entry is used.",
                         },
                     },
                     "required": ["content", "prompt", "models"],
@@ -162,8 +167,10 @@ async def _multi_model_review_async(content: str, prompt: str,
         return {"error": "models list is required"}
     if not isinstance(models, list) or not all(isinstance(m, str) for m in models):
         return {"error": "models must be a list of strings"}
-    if len(models) > MAX_MODELS:
-        return {"error": f"Too many models ({len(models)}). Maximum is {MAX_MODELS}."}
+    # Single-model review under the OAuth migration: collapse any inbound list
+    # to its first entry. The multi_model_review tool name is preserved for
+    # backwards compatibility with prompts and call sites.
+    models = models[:1]
 
     bible_text = _load_bible()
     if bible_text:
@@ -205,7 +212,7 @@ async def _multi_model_review_async(content: str, prompt: str,
 def _parse_model_response(model: str, result, headers_dict) -> dict:
     usage = result.get("usage", {}) if isinstance(result, dict) else {}
     resolved_model = str(usage.get("resolved_model") or model)
-    provider = str(usage.get("provider") or "openrouter")
+    provider = str(usage.get("provider") or "claude_code_oauth")
     if isinstance(result, str):
         return {
             "model": resolved_model, "request_model": model,
@@ -282,7 +289,7 @@ def _emit_usage_event(review_result: dict, ctx: ToolContext) -> None:
             "cache_write_tokens": review_result.get("cache_write_tokens", 0),
             "cost": review_result["cost_estimate"],
         },
-        "provider": review_result.get("provider", "openrouter"),
+        "provider": review_result.get("provider", "claude_code_oauth"),
         "source": "review",
         "category": "review",
     }
@@ -681,7 +688,7 @@ def _run_unified_review(ctx: ToolContext, commit_message: str,
             "⚠️ REVIEW_BLOCKED: Review infrastructure failed — commit cannot proceed "
             "without a successful review.\n"
             f"Error: {e}\n"
-            "Check OPENROUTER_API_KEY, network connectivity, and retry."
+            "Check CLAUDE_CODE_OAUTH_TOKEN, network connectivity, and retry."
         )
         return _handle_review_block_or_warning(
             ctx, blocking_review, blocked_msg,
@@ -695,7 +702,7 @@ def _run_unified_review(ctx: ToolContext, commit_message: str,
             "⚠️ REVIEW_BLOCKED: Review service returned an error — commit cannot proceed "
             "without a successful review.\n"
             f"Error: {result['error']}\n"
-            "Check OPENROUTER_API_KEY, network connectivity, and retry."
+            "Check CLAUDE_CODE_OAUTH_TOKEN, network connectivity, and retry."
         )
         return _handle_review_block_or_warning(
             ctx, blocking_review, blocked_msg,
@@ -718,28 +725,21 @@ def _run_unified_review(ctx: ToolContext, commit_message: str,
 
     models_total = len(model_results)
 
-    # Quorum: at least 2 of N reviewers must succeed
+    # Quorum: the single configured reviewer must succeed.
     successful_reviewers = models_total - len(errored_models)
-    if successful_reviewers < 2:
+    if successful_reviewers < 1:
         ctx._last_review_block_reason = "review_quorum"
         blocked_msg = (
-            f"⚠️ REVIEW_BLOCKED: Only {successful_reviewers} of {models_total} review "
-            f"models responded successfully (minimum 2 required). "
-            f"Unavailable: {', '.join(errored_models)}.\n"
-            "Retry the commit — transient model failures usually resolve quickly."
+            f"⚠️ REVIEW_BLOCKED: Review model unavailable "
+            f"({', '.join(errored_models) or 'unknown error'}).\n"
+            "Retry the commit — transient subscription failures usually resolve quickly."
         )
         return _handle_review_block_or_warning(
             ctx, blocking_review, blocked_msg,
-            "Review enforcement=Advisory: review quorum failure did not block commit. ",
+            "Review enforcement=Advisory: review failure did not block commit. ",
         )
 
     errored_note = ""
-    if errored_models:
-        errored_note = (
-            f"\n\nNote: {len(errored_models)} of {models_total} review models "
-            f"were unavailable ({', '.join(errored_models)}). "
-            "Target is 3 working reviewers."
-        )
 
     if critical_fails:
         # Classify: if all critical failures are parse issues, mark as parse_failure
