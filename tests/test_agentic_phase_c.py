@@ -159,11 +159,12 @@ def _phase_c_writes_only_results(bundle: Path) -> None:
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_phase_c_chains_after_phase_b_and_persists_both_outputs(
+def test_phase_c_runs_after_ab_and_persists_both_outputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The A→B→C chain runs cleanly and lands results.json +
-    interpretation.md. Aggregate cost reflects all three phases."""
+    """Running phases A→B→C directly lands results.json +
+    interpretation.md with the v1 schema. End-to-end A→B→C→D chained-run
+    behavior is exercised by tests/test_agentic_phase_d.py."""
     bundle_dir = tmp_path / "bundle"
     bundle_dir.mkdir()
     (bundle_dir / "raw").mkdir()
@@ -199,13 +200,13 @@ def test_phase_c_chains_after_phase_b_and_persists_both_outputs(
         repo_dir=repo_dir,
     )
 
-    result = _run_async(validator.run())
+    pa = _run_async(validator.run_phase_a())
+    pb = _run_async(validator.run_phase_b())
+    pc = _run_async(validator.run_phase_c())
 
-    assert result.success is True, f"run reported failure: {result.error}"
-    assert [p.phase for p in result.phases] == ["A", "B", "C"]
-    pa, pb, pc = result.phases
-    assert pa.success and pb.success and pc.success
-    assert result.total_cost_usd == pytest.approx(0.8)
+    assert pa.success and pb.success and pc.success, (
+        f"phases failed: A={pa.error} B={pb.error} C={pc.error}"
+    )
 
     # Phase C outputs land on disk
     assert (bundle_dir / "results" / "results.json").exists()
@@ -216,13 +217,9 @@ def test_phase_c_chains_after_phase_b_and_persists_both_outputs(
     )
     assert blob["schema_version"] == "1"
     assert blob["summary"]["n_warn"] == 1
-
-    # Aggregate persisted with all three phases
-    aggregate = json.loads(
-        (bundle_dir / "_agentic_transcripts" / "result.json").read_text(encoding="utf-8")
-    )
-    assert [p["phase"] for p in aggregate["phases"]] == ["A", "B", "C"]
-    assert aggregate["total_cost_usd"] == pytest.approx(0.8)
+    # Phase C reports the two expected outputs as files_written
+    assert "results/results.json" in pc.files_written
+    assert "results/interpretation.md" in pc.files_written
 
 
 def test_phase_c_fails_if_interpretation_md_missing(

@@ -274,8 +274,22 @@ class AgenticValidator:
         )
 
     async def run_phase_d(self) -> AgenticPhaseResult:
-        raise NotImplementedError(
-            "Phase D (report prettification) lands in sub-phase 4 of plan v2."
+        """Phase D — write the polished human-readable report.
+
+        Reads ``./results/results.json``, ``./results/interpretation.md``,
+        ``./methodology/methodology.md``. Writes ``./results/report.md``.
+
+        Phase D is intentionally minimal — Read + Write only, no Bash, no
+        Edit. The goal is presentation, not investigation; if Phase D needs
+        to look at code or run anything, that signals a Phase B or Phase C
+        regression that should be fixed there.
+        """
+        user_prompt = load_phase_prompt("d")
+        return await self._run_phase(
+            phase="D",
+            user_prompt=user_prompt,
+            model="opus",
+            expected_outputs=[self.bundle_dir / "results" / "report.md"],
         )
 
     # ------------------------------------------------------------------
@@ -353,13 +367,32 @@ class AgenticValidator:
             agg.success = phase_c.success
             if not phase_c.success and not agg.error:
                 agg.error = f"phase_c:{phase_c.error}"
-        except NotImplementedError:
-            # Phase D would gate here too once Phase C is the cap.
-            pass
         except Exception as exc:
             agg.success = False
             agg.error = f"phase_c:{type(exc).__name__}:{exc}"
             log.exception("Agentic Phase C failed for bundle %s", self.bundle_id)
+            agg.finished_at = _utcnow_iso()
+            self._persist_aggregate(agg)
+            return agg
+
+        if not phase_c.success:
+            agg.finished_at = _utcnow_iso()
+            self._persist_aggregate(agg)
+            return agg
+
+        # Phase D — report prettification
+        try:
+            phase_d = await self.run_phase_d()
+            agg.phases.append(phase_d)
+            agg.total_cost_usd += phase_d.cost_usd
+            agg.total_turns += phase_d.turns
+            agg.success = phase_d.success
+            if not phase_d.success and not agg.error:
+                agg.error = f"phase_d:{phase_d.error}"
+        except Exception as exc:
+            agg.success = False
+            agg.error = f"phase_d:{type(exc).__name__}:{exc}"
+            log.exception("Agentic Phase D failed for bundle %s", self.bundle_id)
 
         agg.finished_at = _utcnow_iso()
         self._persist_aggregate(agg)
