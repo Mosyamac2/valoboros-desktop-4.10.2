@@ -356,6 +356,57 @@ class EvolutionAction:
 
 
 # ---------------------------------------------------------------------------
+# EvolutionProposal (Plan v2 Phase 9)
+# ---------------------------------------------------------------------------
+
+# Allowed target kinds. The 7-step protocol's allow-list maps each to one or
+# more SOURCE paths:
+#   "prompt"        -> ouroboros/validation/agentic_prompts/phase_a_methodology.md
+#                      (or other phase_*.md if the proposal is more specific)
+#   "helper"        -> ouroboros/validation/agentic_helpers/<file>.py
+#   "system_prompt" -> ouroboros/validation/agentic_system_prompt.py
+#   "pre_check"    -> ouroboros/validation/checks/<file>.py
+_EVOLUTION_TARGET_KINDS = frozenset({"prompt", "helper", "system_prompt", "pre_check"})
+
+
+@dataclass
+class EvolutionProposal:
+    """One unit of evolution work for the source-evolution agent task.
+
+    A proposal points at exactly one target_kind + target_path and carries
+    a natural-language directive that the 7-step protocol's claude_code_edit
+    invocation will interpret to actually modify the file. The
+    methodology_evolver / agentic_evolver emits these; the
+    process_evolution_proposal handler in agent_task_pipeline consumes them.
+    """
+
+    proposal_id: str                    # stable id: e.g. "evo.2026-05-17.qsmells"
+    target_kind: str                    # one of _EVOLUTION_TARGET_KINDS
+    target_path: str                    # relative path inside repo
+    rationale: str                      # why this proposal exists (cite patterns)
+    directive: str                      # what the source change must accomplish
+    source_pattern_kinds: list[str] = field(default_factory=list)
+    source_pattern_count: int = 0       # how many bundles fed this proposal
+    confidence: float = 0.0             # 0-1; ≥ 0.5 enters the queue
+    estimated_effort: str = "moderate"  # trivial | moderate | significant
+    created_at: str = ""                # ISO-8601
+
+    def __post_init__(self) -> None:
+        if self.target_kind not in _EVOLUTION_TARGET_KINDS:
+            raise ValueError(
+                f"EvolutionProposal.target_kind must be one of "
+                f"{sorted(_EVOLUTION_TARGET_KINDS)}, got {self.target_kind!r}"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> EvolutionProposal:
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+# ---------------------------------------------------------------------------
 # ReflectionResult
 # ---------------------------------------------------------------------------
 
