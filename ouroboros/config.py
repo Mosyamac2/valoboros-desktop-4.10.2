@@ -49,8 +49,8 @@ SETTINGS_DEFAULTS = {
     "TELEGRAM_CHAT_ID": "",
 
     "OUROBOROS_NETWORK_PASSWORD": "",
-    "OUROBOROS_MODEL": "anthropic/claude-opus-4.6",
-    "OUROBOROS_MODEL_CODE": "anthropic/claude-opus-4.6",
+    "OUROBOROS_MODEL": "anthropic/claude-opus-4.7",
+    "OUROBOROS_MODEL_CODE": "anthropic/claude-opus-4.7",
     "OUROBOROS_MODEL_LIGHT": "anthropic/claude-sonnet-4.6",
     "OUROBOROS_MODEL_FALLBACK": "anthropic/claude-sonnet-4.6",
     "CLAUDE_CODE_MODEL": "opus",
@@ -68,11 +68,11 @@ SETTINGS_DEFAULTS = {
     "OUROBOROS_EVO_COST_THRESHOLD": 0.10,
     "OUROBOROS_WEBSEARCH_MODEL": "anthropic/claude-sonnet-4.6",
     # Pre-commit review is now single-model (subscription-only — no diversity).
-    "OUROBOROS_REVIEW_MODELS": "anthropic/claude-opus-4.6",
+    "OUROBOROS_REVIEW_MODELS": "anthropic/claude-opus-4.7",
     # Pre-commit review enforcement: advisory | blocking
     "OUROBOROS_REVIEW_ENFORCEMENT": "advisory",
     # Scope review: single-model blocking reviewer (runs after triad review)
-    "OUROBOROS_SCOPE_REVIEW_MODEL": "anthropic/claude-opus-4.6",
+    "OUROBOROS_SCOPE_REVIEW_MODEL": "anthropic/claude-opus-4.7",
     # Reasoning effort per task type: none | low | medium | high
     # OUROBOROS_INITIAL_REASONING_EFFORT remains a legacy alias for task/chat.
     "OUROBOROS_EFFORT_TASK": "medium",
@@ -101,17 +101,17 @@ SETTINGS_DEFAULTS = {
     "OUROBOROS_VALIDATION_STAGE_TIMEOUT_SEC": 600,
     "OUROBOROS_VALIDATION_SANDBOX_MEM_MB": 4096,
     "OUROBOROS_VALIDATION_SANDBOX_CPU_SEC": 120,
-    "OUROBOROS_VALIDATION_COMPREHENSION_MODEL": "anthropic/claude-opus-4.6",
+    "OUROBOROS_VALIDATION_COMPREHENSION_MODEL": "anthropic/claude-opus-4.7",
     "OUROBOROS_VALIDATION_COMPREHENSION_EFFORT": "high",
-    "OUROBOROS_VALIDATION_SYNTHESIS_MODEL": "anthropic/claude-opus-4.6",
-    "OUROBOROS_VALIDATION_IMPROVEMENT_MODEL": "anthropic/claude-opus-4.6",
+    "OUROBOROS_VALIDATION_SYNTHESIS_MODEL": "anthropic/claude-opus-4.7",
+    "OUROBOROS_VALIDATION_IMPROVEMENT_MODEL": "anthropic/claude-opus-4.7",
     "OUROBOROS_VALIDATION_MATURITY_THRESHOLD": 20,
     "OUROBOROS_VALIDATION_EVO_MIN_BUNDLES_EARLY": 1,
     "OUROBOROS_VALIDATION_EVO_MIN_BUNDLES_MATURE": 3,
     "OUROBOROS_VALIDATION_AUTO_EVOLVE": True,
     "OUROBOROS_VALIDATION_AUTO_IMPROVE": True,
     "OUROBOROS_VALIDATION_AUTO_SELF_ASSESS": True,
-    "OUROBOROS_VALIDATION_REPORT_MODEL": "anthropic/claude-opus-4.6",
+    "OUROBOROS_VALIDATION_REPORT_MODEL": "anthropic/claude-opus-4.7",
     "OUROBOROS_VALIDATION_METHODOLOGY_VERSION": "0.1.0",
     "OUROBOROS_VALIDATION_IMPROVEMENT_LIFT_THRESHOLD": 0.01,
     "OUROBOROS_VALIDATION_MAX_HARD_RECOMMENDATIONS": 10,

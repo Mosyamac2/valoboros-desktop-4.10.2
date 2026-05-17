@@ -44,11 +44,11 @@ from ouroboros.gateways import claude_code_chat as gw  # noqa: E402
 
 class TestResolveModelAlias:
     @pytest.mark.parametrize("input_id,expected", [
-        ("anthropic/claude-opus-4.6", "opus"),
+        ("anthropic/claude-opus-4.7", "opus"),
         ("anthropic/claude-sonnet-4.6", "sonnet"),
         ("anthropic/claude-haiku-4.5", "haiku"),
-        ("anthropic::claude-opus-4-6", "opus"),
-        ("claude-opus-4.6", "opus"),
+        ("anthropic::claude-opus-4-7", "opus"),
+        ("claude-opus-4.7", "opus"),
         ("opus", "opus"),
         ("sonnet", "sonnet"),
         ("haiku", "haiku"),

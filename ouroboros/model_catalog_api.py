@@ -18,7 +18,7 @@ from ouroboros.config import load_settings
 # Update when new families ship. ``id`` matches OUROBOROS_MODEL convention.
 _STATIC_CATALOG: list[dict[str, str]] = [
     {
-        "id": "anthropic/claude-opus-4.6",
+        "id": "anthropic/claude-opus-4.7",
         "name": "Claude Opus 4.6",
         "display_name": "Claude Opus 4.6",
         "alias": "opus",

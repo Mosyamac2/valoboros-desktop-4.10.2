@@ -20,7 +20,7 @@ def test_call_llm_with_retry_records_last_error(tmp_path):
     msg, cost = call_llm_with_retry(
         _FailingLLM(),
         [{"role": "user", "content": "hi"}],
-        "anthropic/claude-opus-4.6",
+        "anthropic/claude-opus-4.7",
         None,
         "medium",
         1,
@@ -92,7 +92,7 @@ def test_call_llm_with_retry_accumulates_estimated_cost(tmp_path):
         _msg, _cost = call_llm_with_retry(
             _EstimatedCostLLM(),
             [{"role": "user", "content": "hi"}],
-            "anthropic/claude-opus-4.6",
+            "anthropic/claude-opus-4.7",
             None,
             "medium",
             1,

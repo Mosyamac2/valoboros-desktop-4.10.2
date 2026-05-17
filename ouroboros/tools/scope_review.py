@@ -29,7 +29,7 @@ from ouroboros.utils import run_cmd, utc_now_iso, append_jsonl
 
 log = logging.getLogger(__name__)
 
-_SCOPE_MODEL_DEFAULT = "anthropic/claude-opus-4.6"
+_SCOPE_MODEL_DEFAULT = "anthropic/claude-opus-4.7"
 _SCOPE_MAX_TOKENS = 8192
 
 

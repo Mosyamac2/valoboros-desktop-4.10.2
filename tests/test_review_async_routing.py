@@ -28,7 +28,7 @@ def test_multi_model_review_async_uses_single_claude_model(monkeypatch, tmp_path
                 {"content": '[{"item":"check","verdict":"PASS","severity":"advisory","reason":"ok"}]'},
                 {
                     "provider": "claude_code_oauth",
-                    "resolved_model": "anthropic/claude-opus-4.6",
+                    "resolved_model": "anthropic/claude-opus-4.7",
                     "prompt_tokens": 10,
                     "completion_tokens": 5,
                     "cached_tokens": 7,
@@ -47,14 +47,14 @@ def test_multi_model_review_async_uses_single_claude_model(monkeypatch, tmp_path
         review_module._multi_model_review_async(
             "review target",
             "review instructions",
-            ["anthropic/claude-opus-4.6"],
+            ["anthropic/claude-opus-4.7"],
             ctx,
         )
     )
 
     # Only one LLM call should be made even if multiple models were passed in.
     assert len(calls) == 1
-    assert calls[0]["model"] == "anthropic/claude-opus-4.6"
+    assert calls[0]["model"] == "anthropic/claude-opus-4.7"
     assert calls[0]["temperature"] == 0.2
     assert result["results"][0]["cached_tokens"] == 7
     assert result["results"][0]["cache_write_tokens"] == 2
@@ -89,7 +89,7 @@ def test_multi_model_review_async_collapses_multiple_models_to_first(monkeypatch
         review_module._multi_model_review_async(
             "x", "y",
             [
-                "anthropic/claude-opus-4.6",
+                "anthropic/claude-opus-4.7",
                 "anthropic/claude-sonnet-4.6",
                 "anthropic/claude-haiku-4.5",
             ],
@@ -98,4 +98,4 @@ def test_multi_model_review_async_collapses_multiple_models_to_first(monkeypatch
     )
 
     assert len(calls) == 1
-    assert calls[0]["model"] == "anthropic/claude-opus-4.6"
+    assert calls[0]["model"] == "anthropic/claude-opus-4.7"

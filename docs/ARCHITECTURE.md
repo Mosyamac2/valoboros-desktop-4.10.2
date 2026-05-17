@@ -256,7 +256,7 @@ The Dashboard tab has been removed. Its functionality is now distributed:
 - **Model catalog**: optional `Refresh Model Catalog` action calls `/api/model-catalog`. Failures are non-fatal and surfaced as inline warnings.
 - **Model pickers**: searchable provider-aware pickers replace legacy raw dropdowns for remote models.
 - **Provider prefixes**:
-  - OpenRouter model values stay unprefixed (`anthropic/claude-opus-4.6`).
+  - OpenRouter model values stay unprefixed (`anthropic/claude-opus-4.7`).
   - OpenAI model values use `openai::...`.
   - OpenAI-compatible model values use `openai-compatible::...`.
   - Cloud.ru model values use `cloudru::...`.
@@ -267,7 +267,7 @@ The Dashboard tab has been removed. Its functionality is now distributed:
 - **Review Models**: Comma-separated remote model IDs for pre-commit review.
   Backed by `OUROBOROS_REVIEW_MODELS`.
 - **Scope Review Model**: Single model for the blocking scope reviewer.
-  Backed by `OUROBOROS_SCOPE_REVIEW_MODEL` (default `anthropic/claude-opus-4.6`).
+  Backed by `OUROBOROS_SCOPE_REVIEW_MODEL` (default `anthropic/claude-opus-4.7`).
 - **OpenAI-only review fallback**: if official OpenAI is the only configured remote runtime and the review list is invalid/underspecified, review falls back to the main model repeated three times.
 - **Review Enforcement**: `Advisory` or `Blocking` for pre-commit review behavior.
   Backed by `OUROBOROS_REVIEW_ENFORCEMENT`. Review always runs in both modes.
@@ -513,7 +513,7 @@ backward compatibility but is not the runtime authority.
   dispatch, safety supervisor, context compaction, and event emission
   all operate unchanged. The new piece is just the inference primitive.
 - **Single-model review:** `OUROBOROS_REVIEW_MODELS` collapses to a
-  single Claude id (default `anthropic/claude-opus-4.6`). Cross-family
+  single Claude id (default `anthropic/claude-opus-4.7`). Cross-family
   reviewer diversity was retired; rigor lives in the structured
   checklist, the advisory pre-review pass, and the scope review pass.
 - **WebSearch:** `tools/search.py` calls `claude-agent-sdk` with
@@ -709,7 +709,7 @@ touched-file pack builder, broader repo pack builder, goal/scope resolution.
 
 #### Blocking scope review
 
-- **Module**: `tools/scope_review.py`. Single-model (configurable via `OUROBOROS_SCOPE_REVIEW_MODEL`, default `anthropic/claude-opus-4.6`). Reasoning effort via `OUROBOROS_EFFORT_SCOPE_REVIEW` (default `high`).
+- **Module**: `tools/scope_review.py`. Single-model (configurable via `OUROBOROS_SCOPE_REVIEW_MODEL`, default `anthropic/claude-opus-4.7`). Reasoning effort via `OUROBOROS_EFFORT_SCOPE_REVIEW` (default `high`).
 - **Fail-closed**: timeout, parse error, API failure, or incomplete context all block.
 - **Role**: completeness, forgotten touchpoints, cross-surface consistency, incomplete
   migrations, intent mismatch. NOT a duplicate of line-by-line diff review.
@@ -758,8 +758,8 @@ Settings file: `~/Ouroboros/data/settings.json`. File-locked for concurrent acce
 | TELEGRAM_BOT_TOKEN | "" | Optional. Enables Telegram bridge polling/sending |
 | TELEGRAM_CHAT_ID | "" | Optional. Pin replies to a specific Telegram chat |
 | OUROBOROS_NETWORK_PASSWORD | "" | Optional. Enables the non-loopback auth gate when set; empty still allows open bind, but startup logs a warning |
-| OUROBOROS_MODEL | anthropic/claude-opus-4.6 | Main reasoning model |
-| OUROBOROS_MODEL_CODE | anthropic/claude-opus-4.6 | Code editing model |
+| OUROBOROS_MODEL | anthropic/claude-opus-4.7 | Main reasoning model |
+| OUROBOROS_MODEL_CODE | anthropic/claude-opus-4.7 | Code editing model |
 | OUROBOROS_MODEL_LIGHT | anthropic/claude-sonnet-4.6 | Fast/cheap model (safety, consciousness) |
 | OUROBOROS_MODEL_FALLBACK | anthropic/claude-sonnet-4.6 | Fallback when primary fails |
 | CLAUDE_CODE_MODEL | opus | Anthropic model for Claude Code CLI (sonnet, opus, or full name) |
@@ -768,9 +768,9 @@ Settings file: `~/Ouroboros/data/settings.json`. File-locked for concurrent acce
 | OUROBOROS_PER_TASK_COST_USD | 20.0 | Per-task soft threshold in USD |
 | OUROBOROS_TOOL_TIMEOUT_SEC | 600 | Global tool timeout override (read live from settings.json on each tool call) |
 | OUROBOROS_WEBSEARCH_MODEL | gpt-5.2 | Official OpenAI Responses model for `web_search` when `OPENAI_BASE_URL` is empty |
-| OUROBOROS_REVIEW_MODELS | openai/gpt-5.4,google/gemini-3.1-pro-preview,anthropic/claude-opus-4.6 | Comma-separated OpenRouter model IDs for pre-commit review (min 2 for quorum) |
+| OUROBOROS_REVIEW_MODELS | openai/gpt-5.4,google/gemini-3.1-pro-preview,anthropic/claude-opus-4.7 | Comma-separated OpenRouter model IDs for pre-commit review (min 2 for quorum) |
 | OUROBOROS_REVIEW_ENFORCEMENT | advisory | Pre-commit review enforcement: `advisory` or `blocking` |
-| OUROBOROS_SCOPE_REVIEW_MODEL | anthropic/claude-opus-4.6 | Single model for the blocking scope reviewer |
+| OUROBOROS_SCOPE_REVIEW_MODEL | anthropic/claude-opus-4.7 | Single model for the blocking scope reviewer |
 | OUROBOROS_EFFORT_TASK | medium | Reasoning effort for task/chat: none, low, medium, high |
 | OUROBOROS_EFFORT_EVOLUTION | high | Reasoning effort for evolution tasks |
 | OUROBOROS_EFFORT_REVIEW | medium | Reasoning effort for review tasks |

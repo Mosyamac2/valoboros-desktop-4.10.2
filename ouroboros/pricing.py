@@ -26,15 +26,17 @@ log = logging.getLogger(__name__)
 
 # Anthropic pricing (per 1M tokens, input/cached_input/output) for notional cost.
 MODEL_PRICING_STATIC: Dict[str, Tuple[float, float, float]] = {
+    "anthropic/claude-opus-4.7": (5.0, 0.5, 25.0),
+    "anthropic/claude-opus-4-7": (5.0, 0.5, 25.0),
     "anthropic/claude-opus-4.6": (5.0, 0.5, 25.0),
     "anthropic/claude-opus-4-6": (5.0, 0.5, 25.0),
-    "anthropic/claude-opus-4.7": (5.0, 0.5, 25.0),
     "anthropic/claude-opus-4": (15.0, 1.5, 75.0),
     "anthropic/claude-sonnet-4": (3.0, 0.30, 15.0),
+    "anthropic/claude-sonnet-4.7": (3.0, 0.30, 15.0),
+    "anthropic/claude-sonnet-4-7": (3.0, 0.30, 15.0),
     "anthropic/claude-sonnet-4.6": (3.0, 0.30, 15.0),
     "anthropic/claude-sonnet-4-6": (3.0, 0.30, 15.0),
     "anthropic/claude-sonnet-4.5": (3.0, 0.30, 15.0),
-    "anthropic/claude-sonnet-4.7": (3.0, 0.30, 15.0),
     "anthropic/claude-haiku-4.5": (0.80, 0.08, 4.0),
     "anthropic/claude-haiku-4-5": (0.80, 0.08, 4.0),
 }

@@ -197,7 +197,7 @@ def check_safety(
     try:
         heavy_model = os.environ.get(
             "OUROBOROS_MODEL_CODE",
-            os.environ.get("OUROBOROS_MODEL", "anthropic/claude-opus-4.6"),
+            os.environ.get("OUROBOROS_MODEL", "anthropic/claude-opus-4.7"),
         )
         log.info(f"Running deep safety check on {tool_name} using {heavy_model} (local={_use_local_code})")
         deep_system = (

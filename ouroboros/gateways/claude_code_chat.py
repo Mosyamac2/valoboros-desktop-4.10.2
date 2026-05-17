@@ -46,21 +46,29 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _MODEL_ALIASES = {
-    # Map Ouroboros-style ids to Claude Code CLI aliases.
+    # Map Ouroboros-style ids to Claude Code CLI aliases. Keep both the
+    # current versions and the older ones so old settings.json files keep
+    # working without manual migration.
+    "anthropic/claude-opus-4.7": "opus",
+    "anthropic/claude-opus-4-7": "opus",
     "anthropic/claude-opus-4.6": "opus",
     "anthropic/claude-opus-4-6": "opus",
-    "anthropic/claude-opus-4.7": "opus",
+    "anthropic/claude-sonnet-4.7": "sonnet",
+    "anthropic/claude-sonnet-4-7": "sonnet",
     "anthropic/claude-sonnet-4.6": "sonnet",
     "anthropic/claude-sonnet-4-6": "sonnet",
-    "anthropic/claude-sonnet-4.7": "sonnet",
     "anthropic/claude-haiku-4.5": "haiku",
     "anthropic/claude-haiku-4-5": "haiku",
-    "claude-opus-4-6": "opus",
+    "claude-opus-4.7": "opus",
+    "claude-opus-4-7": "opus",
     "claude-opus-4.6": "opus",
-    "claude-sonnet-4-6": "sonnet",
+    "claude-opus-4-6": "opus",
+    "claude-sonnet-4.7": "sonnet",
+    "claude-sonnet-4-7": "sonnet",
     "claude-sonnet-4.6": "sonnet",
-    "claude-haiku-4-5": "haiku",
+    "claude-sonnet-4-6": "sonnet",
     "claude-haiku-4.5": "haiku",
+    "claude-haiku-4-5": "haiku",
 }
 
 _VALID_ALIASES = frozenset(["opus", "sonnet", "haiku"])

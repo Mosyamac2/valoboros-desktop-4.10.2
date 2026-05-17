@@ -40,21 +40,21 @@ from ouroboros.llm import LLMClient  # noqa: E402
 
 
 def test_default_model_reads_env(monkeypatch):
-    monkeypatch.setenv("OUROBOROS_MODEL", "anthropic/claude-opus-4.6")
-    assert LLMClient().default_model() == "anthropic/claude-opus-4.6"
+    monkeypatch.setenv("OUROBOROS_MODEL", "anthropic/claude-opus-4.7")
+    assert LLMClient().default_model() == "anthropic/claude-opus-4.7"
 
 
 def test_default_model_falls_back_to_constant(monkeypatch):
     monkeypatch.delenv("OUROBOROS_MODEL", raising=False)
-    assert LLMClient().default_model() == "anthropic/claude-opus-4.6"
+    assert LLMClient().default_model() == "anthropic/claude-opus-4.7"
 
 
 def test_available_models_dedupes(monkeypatch):
-    monkeypatch.setenv("OUROBOROS_MODEL", "anthropic/claude-opus-4.6")
-    monkeypatch.setenv("OUROBOROS_MODEL_CODE", "anthropic/claude-opus-4.6")
+    monkeypatch.setenv("OUROBOROS_MODEL", "anthropic/claude-opus-4.7")
+    monkeypatch.setenv("OUROBOROS_MODEL_CODE", "anthropic/claude-opus-4.7")
     monkeypatch.setenv("OUROBOROS_MODEL_LIGHT", "anthropic/claude-sonnet-4.6")
     models = LLMClient().available_models()
-    assert models == ["anthropic/claude-opus-4.6", "anthropic/claude-sonnet-4.6"]
+    assert models == ["anthropic/claude-opus-4.7", "anthropic/claude-sonnet-4.6"]
 
 
 def test_llm_client_construction_ignores_legacy_args():

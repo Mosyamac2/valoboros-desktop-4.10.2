@@ -478,10 +478,10 @@ class LLMClient:
     )
 
     def default_model(self) -> str:
-        return os.environ.get("OUROBOROS_MODEL", "anthropic/claude-opus-4.6")
+        return os.environ.get("OUROBOROS_MODEL", "anthropic/claude-opus-4.7")
 
     def available_models(self) -> List[str]:
-        main = os.environ.get("OUROBOROS_MODEL", "anthropic/claude-opus-4.6")
+        main = os.environ.get("OUROBOROS_MODEL", "anthropic/claude-opus-4.7")
         code = os.environ.get("OUROBOROS_MODEL_CODE", "")
         light = os.environ.get("OUROBOROS_MODEL_LIGHT", "")
         models = [main]

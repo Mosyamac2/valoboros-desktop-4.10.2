@@ -281,9 +281,9 @@ class TestScopeReviewModule:
 
     def test_scope_review_uses_opus(self):
         mod = _get_module("ouroboros.tools.scope_review")
-        assert "claude-opus-4.6" in mod._SCOPE_MODEL_DEFAULT
+        assert "claude-opus-4.7" in mod._SCOPE_MODEL_DEFAULT
         # Also verify the getter works
-        assert "claude-opus-4.6" in mod._get_scope_model()
+        assert "claude-opus-4.7" in mod._get_scope_model()
 
     def test_scope_review_model_configurable_via_env(self):
         """OUROBOROS_SCOPE_REVIEW_MODEL env overrides the default."""

@@ -521,8 +521,8 @@ All from `ouroboros/config.py` → `SETTINGS_DEFAULTS`. Override via env vars or
 
 | Parameter | Default | Env Var |
 |-----------|---------|---------|
-| Main model | `anthropic/claude-opus-4.6` | `OUROBOROS_MODEL` |
-| Code model | `anthropic/claude-opus-4.6` | `OUROBOROS_MODEL_CODE` |
+| Main model | `anthropic/claude-opus-4.7` | `OUROBOROS_MODEL` |
+| Code model | `anthropic/claude-opus-4.7` | `OUROBOROS_MODEL_CODE` |
 | Light model | `anthropic/claude-sonnet-4.6` | `OUROBOROS_MODEL_LIGHT` |
 | Fallback | `anthropic/claude-sonnet-4.6` | `OUROBOROS_MODEL_FALLBACK` |
 | Claude Code model | `opus` | `CLAUDE_CODE_MODEL` |
@@ -536,8 +536,8 @@ All from `ouroboros/config.py` → `SETTINGS_DEFAULTS`. Override via env vars or
 | Tool timeout | `600s` | `OUROBOROS_TOOL_TIMEOUT_SEC` |
 | Max workers | `5` | `OUROBOROS_MAX_WORKERS` |
 | Review enforcement | `advisory` | `OUROBOROS_REVIEW_ENFORCEMENT` |
-| Review model (single) | `anthropic/claude-opus-4.6` | `OUROBOROS_REVIEW_MODELS` |
-| Scope review model | `anthropic/claude-opus-4.6` | `OUROBOROS_SCOPE_REVIEW_MODEL` |
+| Review model (single) | `anthropic/claude-opus-4.7` | `OUROBOROS_REVIEW_MODELS` |
+| Scope review model | `anthropic/claude-opus-4.7` | `OUROBOROS_SCOPE_REVIEW_MODEL` |
 | BG wakeup range | `30–7200s` | `OUROBOROS_BG_WAKEUP_MIN` / `_MAX` |
 | BG max rounds | `5` | `OUROBOROS_BG_MAX_ROUNDS` |
 | Evo cost threshold | `$0.10` | `OUROBOROS_EVO_COST_THRESHOLD` |

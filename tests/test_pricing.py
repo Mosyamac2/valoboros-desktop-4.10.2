@@ -85,20 +85,20 @@ class TestInferApiKeyType:
     def test_oauth_env_returns_oauth(self, monkeypatch):
         monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-oauth")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-        assert infer_api_key_type("anthropic/claude-opus-4.6") == "claude_code_oauth"
+        assert infer_api_key_type("anthropic/claude-opus-4.7") == "claude_code_oauth"
 
     def test_api_key_env_returns_api_key(self, monkeypatch):
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant")
-        assert infer_api_key_type("anthropic/claude-opus-4.6") == "anthropic_api_key"
+        assert infer_api_key_type("anthropic/claude-opus-4.7") == "anthropic_api_key"
 
     def test_local_suffix_overrides(self, monkeypatch):
         monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-oauth")
         assert infer_api_key_type("qwen2.5-7b (local)") == "local"
 
     def test_explicit_provider_override(self):
-        assert infer_api_key_type("anthropic/claude-opus-4.6", provider="local") == "local"
-        assert infer_api_key_type("anthropic/claude-opus-4.6", provider="claude_code_oauth") == "claude_code_oauth"
+        assert infer_api_key_type("anthropic/claude-opus-4.7", provider="local") == "local"
+        assert infer_api_key_type("anthropic/claude-opus-4.7", provider="claude_code_oauth") == "claude_code_oauth"
 
     def test_unknown_returns_unknown(self, monkeypatch):
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
@@ -153,7 +153,7 @@ class TestEmitLlmUsageEvent:
         emit_llm_usage_event(
             event_queue=q,
             task_id="t",
-            model="anthropic/claude-opus-4.6",
+            model="anthropic/claude-opus-4.7",
             usage={"prompt_tokens": 100, "completion_tokens": 50, "notional_cost": 0.025},
             cost=0.0,
         )

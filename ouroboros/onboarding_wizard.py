@@ -50,7 +50,7 @@ _LOCAL_PRESETS: Dict[str, Dict[str, Any]] = {
     },
 }
 _MODEL_SUGGESTIONS = [
-    "anthropic/claude-opus-4.6",
+    "anthropic/claude-opus-4.7",
     "anthropic/claude-sonnet-4.6",
     "anthropic/claude-haiku-4.5",
 ]

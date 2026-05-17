@@ -20,7 +20,7 @@ def test_model_catalog_returns_static_anthropic_models_when_auth_present(monkeyp
     payload = _run_endpoint(monkeypatch, {"CLAUDE_CODE_OAUTH_TOKEN": "sk-oauth"})
     assert payload["errors"] == []
     ids = {item["id"] for item in payload["items"]}
-    assert "anthropic/claude-opus-4.6" in ids
+    assert "anthropic/claude-opus-4.7" in ids
     assert "anthropic/claude-sonnet-4.6" in ids
     assert all(item["provider_id"] == "claude_code_oauth" for item in payload["items"])
 

@@ -32,8 +32,8 @@ def _base_payload() -> dict:
         "LOCAL_MODEL_N_GPU_LAYERS": -1,
         "LOCAL_MODEL_CHAT_FORMAT": "",
         "LOCAL_ROUTING_MODE": "cloud",
-        "OUROBOROS_MODEL": "anthropic/claude-opus-4.6",
-        "OUROBOROS_MODEL_CODE": "anthropic/claude-opus-4.6",
+        "OUROBOROS_MODEL": "anthropic/claude-opus-4.7",
+        "OUROBOROS_MODEL_CODE": "anthropic/claude-opus-4.7",
         "OUROBOROS_MODEL_LIGHT": "anthropic/claude-sonnet-4.6",
         "OUROBOROS_MODEL_FALLBACK": "anthropic/claude-sonnet-4.6",
     }
@@ -53,7 +53,7 @@ def test_prepare_onboarding_settings_accepts_oauth_subscription():
 
     assert error is None
     assert prepared["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-claude-oauth-1234567890"
-    assert prepared["OUROBOROS_MODEL"] == "anthropic/claude-opus-4.6"
+    assert prepared["OUROBOROS_MODEL"] == "anthropic/claude-opus-4.7"
     assert prepared["TOTAL_BUDGET"] == 10.0
     assert prepared["OUROBOROS_PER_TASK_COST_USD"] == 20.0
     assert prepared["OUROBOROS_REVIEW_ENFORCEMENT"] == "advisory"

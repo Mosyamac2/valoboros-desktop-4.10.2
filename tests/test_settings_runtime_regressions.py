@@ -73,7 +73,7 @@ def test_merge_settings_payload_preserves_masked_secrets(monkeypatch, tmp_path):
     merged = server_module._merge_settings_payload(
         {
             "CLAUDE_CODE_OAUTH_TOKEN": "sk-oauth-real-secret",
-            "OUROBOROS_MODEL": "anthropic/claude-opus-4.6",
+            "OUROBOROS_MODEL": "anthropic/claude-opus-4.7",
         },
         {
             "CLAUDE_CODE_OAUTH_TOKEN": "sk-oauth...",

@@ -53,7 +53,7 @@ def test_apply_runtime_provider_defaults_is_noop_under_oauth():
     """
     settings = {
         "CLAUDE_CODE_OAUTH_TOKEN": "sk-oauth",
-        "OUROBOROS_MODEL": "anthropic/claude-opus-4.6",
+        "OUROBOROS_MODEL": "anthropic/claude-opus-4.7",
     }
     normalized, changed, changed_keys = apply_runtime_provider_defaults(settings)
     assert not changed

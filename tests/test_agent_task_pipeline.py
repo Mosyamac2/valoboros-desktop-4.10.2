@@ -9,8 +9,8 @@ def test_task_summary_uses_light_model_when_set(tmp_path, monkeypatch):
     OUROBOROS_MODEL_LIGHT when it differs from the default."""
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-test-oauth")
     monkeypatch.setenv("OUROBOROS_MODEL_LIGHT", "anthropic/claude-sonnet-4.6")
-    monkeypatch.setenv("OUROBOROS_MODEL", "anthropic/claude-opus-4.6")
-    monkeypatch.setenv("OUROBOROS_MODEL_CODE", "anthropic/claude-opus-4.6")
+    monkeypatch.setenv("OUROBOROS_MODEL", "anthropic/claude-opus-4.7")
+    monkeypatch.setenv("OUROBOROS_MODEL_CODE", "anthropic/claude-opus-4.7")
 
     captured = {}
 
@@ -45,8 +45,8 @@ def test_task_summary_uses_light_model_when_set(tmp_path, monkeypatch):
 def test_task_summary_falls_back_to_default_when_light_unset(monkeypatch):
     monkeypatch.delenv("OUROBOROS_MODEL_LIGHT", raising=False)
     assert (
-        pipeline._resolve_task_summary_model("anthropic/claude-opus-4.6")
-        == "anthropic/claude-opus-4.6"
+        pipeline._resolve_task_summary_model("anthropic/claude-opus-4.7")
+        == "anthropic/claude-opus-4.7"
     )
 
 

@@ -358,12 +358,12 @@ All keys are configured through the **Settings** page in the UI or during the fi
 
 | Slot | Default | Purpose |
 |------|---------|---------|
-| Main | `anthropic/claude-opus-4.6` | Primary reasoning |
-| Code | `anthropic/claude-opus-4.6` | Code editing |
+| Main | `anthropic/claude-opus-4.7` | Primary reasoning |
+| Code | `anthropic/claude-opus-4.7` | Code editing |
 | Light | `anthropic/claude-sonnet-4.6` | Safety checks, consciousness, fast tasks |
 | Fallback | `anthropic/claude-sonnet-4.6` | When primary model fails |
 | Claude Code CLI | `opus` | Anthropic model for Claude Code CLI tools |
-| Scope Review | `anthropic/claude-opus-4.6` | Blocking scope reviewer (single-model, after triad review) |
+| Scope Review | `anthropic/claude-opus-4.7` | Blocking scope reviewer (single-model, after triad review) |
 | Web Search | `gpt-5.2` | OpenAI Responses API for web search |
 
 Task/chat reasoning defaults to `medium`. Scope review reasoning defaults to `high`.
