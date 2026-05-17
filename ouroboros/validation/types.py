@@ -412,6 +412,88 @@ class ModelProfile:
 
 
 # ---------------------------------------------------------------------------
+# AgenticPhaseResult / AgenticValidationResult (Plan v2)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AgenticPhaseResult:
+    """Outcome of one phase (A/B/C/D) of an agentic validation session.
+
+    The agentic runner persists one of these per phase plus a session-level
+    AgenticValidationResult. Together they form the audit trail mandated by
+    BIBLE v5.1 (no silent truncation, full traceability).
+    """
+
+    phase: str                              # "A" | "B" | "C" | "D"
+    success: bool
+    session_id: str = ""
+    cost_usd: float = 0.0
+    turns: int = 0
+    files_written: list[str] = field(default_factory=list)
+    transcript_path: str = ""               # path to phase_<x>.jsonl
+    result_text: str = ""                   # final assistant text
+    error: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> AgenticPhaseResult:
+        return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
+class AgenticValidationResult:
+    """Aggregate result of a per-bundle agentic validation session.
+
+    Contains one AgenticPhaseResult per executed phase. Built incrementally
+    by AgenticValidator.run() so that early phases land on disk even if a
+    later phase fails — partial results are still useful for debugging.
+    """
+
+    bundle_id: str
+    bundle_dir: str
+    model_type: str = "unknown"
+    phases: list[AgenticPhaseResult] = field(default_factory=list)
+    total_cost_usd: float = 0.0
+    total_turns: int = 0
+    success: bool = False
+    error: str = ""
+    started_at: str = ""
+    finished_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "bundle_id": self.bundle_id,
+            "bundle_dir": self.bundle_dir,
+            "model_type": self.model_type,
+            "phases": [p.to_dict() for p in self.phases],
+            "total_cost_usd": self.total_cost_usd,
+            "total_turns": self.total_turns,
+            "success": self.success,
+            "error": self.error,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> AgenticValidationResult:
+        phases = [AgenticPhaseResult.from_dict(p) for p in d.get("phases", [])]
+        return cls(
+            bundle_id=d["bundle_id"],
+            bundle_dir=d["bundle_dir"],
+            model_type=d.get("model_type", "unknown"),
+            phases=phases,
+            total_cost_usd=d.get("total_cost_usd", 0.0),
+            total_turns=d.get("total_turns", 0),
+            success=d.get("success", False),
+            error=d.get("error", ""),
+            started_at=d.get("started_at", ""),
+            finished_at=d.get("finished_at", ""),
+        )
+
+
+# ---------------------------------------------------------------------------
 # ValidationConfig
 # ---------------------------------------------------------------------------
 
