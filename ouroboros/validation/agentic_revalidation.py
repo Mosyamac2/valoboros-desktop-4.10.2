@@ -45,6 +45,12 @@ from ouroboros.validation.types import (
 log = logging.getLogger(__name__)
 
 
+# Threshold beyond which a verdict transition counts as a true_positive
+# finding (the original check was right about there being a real issue
+# AND the recommendation actually fixed it).
+_LIFT_TP_THRESHOLD = 0.01
+
+
 class AgenticRevalidationPipeline:
     """Re-run the Phase-B validation_project on the improved bundle.
 
@@ -128,6 +134,11 @@ class AgenticRevalidationPipeline:
             json.dumps(improved_results, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+
+        # Plan v2 Piece 2: write per-recommendation outcomes to the
+        # EffectivenessTracker so over time we can compute which check_ids
+        # produce recommendations that ACTUALLY improve metrics.
+        self._record_effectiveness(result)
 
         return result
 
@@ -405,6 +416,117 @@ class AgenticRevalidationPipeline:
         categorical_lift = 0.2 * net_categorical
 
         return numeric_lift + categorical_lift
+
+    # ------------------------------------------------------------------
+    # EffectivenessTracker integration (Plan v2 Piece 2)
+    # ------------------------------------------------------------------
+
+    def _record_effectiveness(self, result: RevalidationResult) -> None:
+        """Write per-applied-recommendation outcomes to the EffectivenessTracker.
+
+        For each recommendation that the improver actually applied, we look
+        up the corresponding per-test entry in ``result.per_test_deltas``
+        (the recommendation's ``finding_check_id`` is the namespaced check
+        id like ``QUANTITATIVE.quant3``; we map back to test id ``quant3``).
+        Then:
+
+        * **Signal A** (recommendation quality, ``record_recommendation_result``):
+          metric_before / metric_after for that specific test, prefixed
+          with the test id to avoid cross-test metric-name collisions.
+        * **Signal B** (finding feedback, ``record_finding_feedback``):
+          - ``fail_to_pass`` / ``warn_to_pass`` → true_positive (the
+            check correctly identified a real issue + the rec fixed it).
+            Weight 0.5 — inferred from improvement, not human-confirmed.
+          - ``pass_to_fail`` / ``pass_to_warn`` → false_positive (the
+            recommendation introduced a regression — finding may have
+            been wrong, or fix was net-bad). Weight 0.3.
+          - All other transitions → no Signal B record (ambiguous).
+
+        Tracker writes are best-effort: any IOError or import failure is
+        logged and swallowed so revalidation success doesn't depend on
+        observability infrastructure.
+        """
+        try:
+            from ouroboros.validation.effectiveness import EffectivenessTracker
+        except ImportError as exc:
+            log.warning("EffectivenessTracker import failed: %s", exc)
+            return
+
+        try:
+            tracker = EffectivenessTracker(self.bundle_dir.parent)
+        except Exception as exc:
+            log.warning("EffectivenessTracker init failed: %s", exc)
+            return
+
+        # Index per_test_deltas by test id for fast lookup
+        per_test_by_id: dict[str, dict[str, Any]] = {
+            e["id"]: e for e in result.per_test_deltas if e.get("id")
+        }
+
+        for check_id in result.recommendations_applied:
+            test_id = self._test_id_from_check_id(check_id)
+            entry = per_test_by_id.get(test_id)
+            if entry is None:
+                # Recommendation targeted a check we don't have a per-test
+                # delta for — skip the rec signal; we'd record noise.
+                continue
+
+            mb_raw = entry.get("metric_before") or {}
+            ma_raw = entry.get("metric_after") or {}
+            mb = {
+                f"{test_id}.{k}": float(v)
+                for k, v in mb_raw.items() if isinstance(v, (int, float))
+            }
+            ma = {
+                f"{test_id}.{k}": float(v)
+                for k, v in ma_raw.items() if isinstance(v, (int, float))
+            }
+            try:
+                tracker.record_recommendation_result(
+                    check_id=check_id, bundle_id=self.bundle_id,
+                    metric_before=mb, metric_after=ma,
+                )
+            except Exception as exc:
+                log.warning(
+                    "record_recommendation_result(%s) failed: %s", check_id, exc
+                )
+
+            before = entry.get("verdict_before") or ""
+            after = entry.get("verdict_after") or ""
+            transition = f"{before}_to_{after}"
+            if transition in ("fail_to_pass", "warn_to_pass"):
+                try:
+                    tracker.record_finding_feedback(
+                        check_id=check_id, bundle_id=self.bundle_id,
+                        verdict="true_positive",
+                        source="improvement_inferred", weight=0.5,
+                    )
+                except Exception as exc:
+                    log.warning("record_finding_feedback TP %s failed: %s",
+                                check_id, exc)
+            elif transition in ("pass_to_fail", "pass_to_warn"):
+                try:
+                    tracker.record_finding_feedback(
+                        check_id=check_id, bundle_id=self.bundle_id,
+                        verdict="false_positive",
+                        source="improvement_inferred", weight=0.3,
+                    )
+                except Exception as exc:
+                    log.warning("record_finding_feedback FP %s failed: %s",
+                                check_id, exc)
+
+    @staticmethod
+    def _test_id_from_check_id(check_id: str) -> str:
+        """``QUANTITATIVE.quant3`` → ``quant3``; ``QUAL.q1`` → ``q1``.
+
+        The parser namespaces check ids by block — the tracker takes the
+        namespaced id verbatim, but mapping back to the per-test entry
+        needs the bare id. If the check_id has no ``.`` (legacy v1
+        check_id like ``S2.OOS.AUC``) we return it unchanged.
+        """
+        if "." not in check_id:
+            return check_id
+        return check_id.split(".", 1)[1]
 
     def _verdict_for(self, lift: float, categorical: dict[str, int]) -> str:
         thr = self.config.improvement_lift_threshold
