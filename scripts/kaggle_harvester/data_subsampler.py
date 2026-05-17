@@ -19,7 +19,7 @@ import re
 import shutil
 import zipfile
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional  # noqa: F401  — used by extract_archive
 
 log = logging.getLogger(__name__)
 
@@ -58,15 +58,52 @@ class SubsampleResult:
     note: str  # one-paragraph human-readable for the description appendix
 
 
-def extract_archive(archive: pathlib.Path, dest: pathlib.Path) -> pathlib.Path:
+class ArchiveTooLargeError(RuntimeError):
+    """Raised when a Kaggle archive's uncompressed size exceeds the cap."""
+
+    def __init__(self, uncompressed_mb: int, cap_mb: int):
+        super().__init__(
+            f"archive uncompressed size {uncompressed_mb} MB > cap {cap_mb} MB"
+        )
+        self.uncompressed_mb = uncompressed_mb
+        self.cap_mb = cap_mb
+
+
+def extract_archive(
+    archive: pathlib.Path,
+    dest: pathlib.Path,
+    *,
+    max_uncompressed_mb: Optional[int] = None,
+    delete_archive_after: bool = True,
+) -> pathlib.Path:
     """Unzip a Kaggle data archive into ``dest``. Returns ``dest``.
 
     If ``archive`` is already a single non-zip file, copies it instead.
+
+    Pre-extract size guard: when ``max_uncompressed_mb`` is set, the zip
+    directory is inspected and the total uncompressed size summed. If it
+    exceeds the cap, ``ArchiveTooLargeError`` is raised BEFORE extraction
+    starts — protects the filesystem from competitions like amex-default
+    whose archives explode 10x+ on disk.
+
+    After a successful extract, the raw archive is unlinked unless
+    ``delete_archive_after=False`` — keeps peak disk usage close to the
+    extracted size, not 2x it.
     """
     dest.mkdir(parents=True, exist_ok=True)
     if archive.suffix.lower() == ".zip":
         with zipfile.ZipFile(archive) as zf:
+            if max_uncompressed_mb is not None:
+                total_uncompressed = sum(zi.file_size for zi in zf.infolist())
+                uncompressed_mb = int(total_uncompressed / (1024 * 1024))
+                if uncompressed_mb > max_uncompressed_mb:
+                    raise ArchiveTooLargeError(uncompressed_mb, max_uncompressed_mb)
             zf.extractall(dest)
+        if delete_archive_after:
+            try:
+                archive.unlink()
+            except OSError:
+                pass
     else:
         shutil.copy2(archive, dest / archive.name)
     return dest
@@ -195,6 +232,29 @@ def maybe_subsample(extract_root: pathlib.Path) -> SubsampleResult:
             note=f"Could not peek at {train.name} to plan subsampling: {e}",
         )
     target_col = _detect_target_column(list(head.columns))
+
+    if target_col:
+        # Sniff whether the "target" looks like a classification label
+        # (low cardinality, stratifiable) or a regression target (high
+        # cardinality, continuous — stratification is meaningless and the
+        # minority-floor check would always trip).
+        try:
+            sample = pd.read_csv(train, usecols=[target_col], nrows=20000)
+            n_unique = sample[target_col].nunique(dropna=True)
+            n_rows = len(sample)
+        except Exception:
+            n_unique, n_rows = 0, 0
+        is_classification_target = (
+            n_unique > 0 and n_unique <= 50
+            and (n_rows == 0 or n_unique / max(n_rows, 1) <= 0.05)
+        )
+        if not is_classification_target:
+            log.info(
+                "subsample: target '%s' has %d unique values in sample of %d rows; "
+                "treating as regression / continuous and using uniform subsample.",
+                target_col, n_unique, n_rows,
+            )
+            target_col = None  # fall through to uniform branch below
 
     if target_col:
         ok, minority, note = _stratified_subsample(train, target_col, _TARGET_BYTES)

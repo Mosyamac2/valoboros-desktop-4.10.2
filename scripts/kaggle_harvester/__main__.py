@@ -23,10 +23,11 @@ from . import state as state_mod
 from .allow_list import AllowList
 from .auth import KaggleAuth, KaggleAuthError, load_credentials, smoke_probe
 from .bundle_assembler import assemble, summarize
-from .data_subsampler import extract_archive, maybe_subsample
+from .data_subsampler import ArchiveTooLargeError, extract_archive, maybe_subsample
 from .discovery import (
     CompetitionCandidate,
     _to_candidate,
+    candidate_from_slug,
     iter_candidates,
     probe_data_access,
 )
@@ -36,6 +37,7 @@ from .notebook_size_guard import maybe_strip_outputs
 
 DEFAULT_INBOX = pathlib.Path.home() / "Ouroboros" / "data" / "ml-models-to-validate"
 DEFAULT_DOMAINS = ("tabular", "nlp")
+DEFAULT_MAX_BUNDLE_MB = 500  # hard cap on extracted data size after subsample
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -128,6 +130,7 @@ def _process_one(
     *,
     inbox: pathlib.Path,
     dry_run: bool,
+    max_bundle_mb: int = DEFAULT_MAX_BUNDLE_MB,
 ) -> tuple[bool, str]:
     """Process a single competition. Returns ``(success, message)``."""
     accessible, reason = probe_data_access(client, cand)
@@ -151,11 +154,37 @@ def _process_one(
             return False, f"skip {cand.slug}: data_download_http_{e.status}"
 
         extracted = workdir / "extracted"
-        extract_archive(archive, extracted)
+        try:
+            # Pre-extract uncompressed-size guard. Some Kaggle archives
+            # explode 10x+ on disk (amex-default-prediction's 6 GB zip
+            # extracts to 50+ GB). Skip these BEFORE they crash the disk.
+            extract_archive(archive, extracted,
+                            max_uncompressed_mb=max_bundle_mb * 2,
+                            delete_archive_after=True)
+        except ArchiveTooLargeError as e:
+            reason_str = f"archive_too_large:{e.uncompressed_mb}MB>{e.cap_mb}MB"
+            state.record_skip(cand.slug, reason_str)
+            state.block(cand.slug)
+            return False, f"skip {cand.slug}: {reason_str}"
         subsample = maybe_subsample(extracted)
         if subsample.reason == "minority_floor_protection":
             state.record_skip(cand.slug, "minority_floor_protection")
             return False, f"skip {cand.slug}: minority_floor_protection ({subsample.note})"
+
+        # Hard bundle-size cap (infrastructure safety): even after the
+        # CSV-aware subsample, some competitions ship gigabytes of binary
+        # data (TFRecord image dumps, parquet shards, etc.) that the
+        # subsampler can't shrink. Skip those rather than dump > 500 MB
+        # into the validator's sandbox. Slug is also permanently blocked
+        # so a future --resume doesn't retry it.
+        extracted_bytes = sum(p.stat().st_size for p in extracted.rglob("*") if p.is_file())
+        cap_bytes = max_bundle_mb * 1024 * 1024
+        if extracted_bytes > cap_bytes:
+            mb = extracted_bytes / 1024 / 1024
+            reason_str = f"bundle_too_large:{mb:.0f}MB>{max_bundle_mb}MB"
+            state.record_skip(cand.slug, reason_str)
+            state.block(cand.slug)
+            return False, f"skip {cand.slug}: {reason_str}"
 
         _stripped, nb_note = maybe_strip_outputs(kernel.source_path)
         bundle = assemble(
@@ -200,58 +229,73 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"State already has {len(state.harvested)} bundles; nothing to do.")
         return 0
 
-    # ---- Tier 1: walk Kaggle's listing ---------------------------------
     closed_only = not args.include_open
-    print(f"Tier 1: walking Kaggle listing for domains={sorted(domains)}, "
-          f"target={needed}, closed_only={closed_only}")
-    tier1_success = 0
-    for cand in iter_candidates(client, domains=domains,
-                                seen_slugs=frozenset(state.seen()),
-                                closed_only=closed_only):
-        if tier1_success >= needed:
-            break
-        ok, msg = _process_one(cand, client, state, rng,
-                               inbox=inbox, dry_run=args.dry_run)
-        print(msg)
-        if ok:
-            tier1_success += 1
-        state_mod.save(state)
-    # ---- Tier 2: allow-list --------------------------------------------
-    remaining = needed - tier1_success
-    if remaining > 0 and args.allow_list:
+    cap_mb = args.max_bundle_mb
+
+    def _run_allow_list(remaining: int) -> int:
+        if remaining <= 0 or not args.allow_list:
+            return 0
         allow = AllowList.load(pathlib.Path(args.allow_list).expanduser())
         if not allow:
-            print(f"Tier 2 requested but allow-list file is empty: {args.allow_list}")
-        else:
-            print(f"Tier 2: walking user allow-list of {len(allow.slugs)} slugs, "
-                  f"need {remaining} more")
-            state.tier = 2
-            for slug in allow.slugs:
-                if remaining <= 0:
-                    break
-                if slug in state.seen():
-                    continue
-                matches = client.list_competitions(search=slug, page_size=10)
-                raw = next(
-                    (m for m in matches
-                     if m.get("urlNullable", "").rstrip("/").endswith("/" + slug)),
-                    None,
-                )
-                cand = _to_candidate(raw) if raw else None
-                if cand is None:
-                    state.record_skip(slug, "allow_list_slug_not_resolved")
-                    continue
-                ok, msg = _process_one(cand, client, state, rng,
-                                       inbox=inbox, dry_run=args.dry_run)
-                print(msg)
-                if ok:
-                    remaining -= 1
-                state_mod.save(state)
+            print(f"Allow-list requested but file is empty: {args.allow_list}")
+            return 0
+        print(f"Allow-list pass: walking {len(allow.slugs)} user-curated slugs, "
+              f"need {remaining}")
+        state.tier = 2
+        got = 0
+        for slug in allow.slugs:
+            if got >= remaining:
+                break
+            if slug in state.seen():
+                print(f"skip {slug}: already_in_state")
+                continue
+            # User-named slug: build the candidate directly. Don't rely on
+            # Kaggle's search index — it silently omits older competitions.
+            cand = candidate_from_slug(slug)
+            ok, msg = _process_one(cand, client, state, rng,
+                                   inbox=inbox, dry_run=args.dry_run,
+                                   max_bundle_mb=cap_mb)
+            print(msg)
+            if ok:
+                got += 1
+            state_mod.save(state)
+        return got
+
+    def _run_tier1(remaining: int) -> int:
+        if remaining <= 0:
+            return 0
+        print(f"Tier 1: walking Kaggle listing for domains={sorted(domains)}, "
+              f"target={remaining}, closed_only={closed_only}, cap={cap_mb}MB")
+        state.tier = 1
+        got = 0
+        for cand in iter_candidates(client, domains=domains,
+                                    seen_slugs=frozenset(state.seen()),
+                                    closed_only=closed_only):
+            if got >= remaining:
+                break
+            ok, msg = _process_one(cand, client, state, rng,
+                                   inbox=inbox, dry_run=args.dry_run,
+                                   max_bundle_mb=cap_mb)
+            print(msg)
+            if ok:
+                got += 1
+            state_mod.save(state)
+        return got
+
+    # Order of passes
+    if args.prioritize_allow_list:
+        tier_a_got = _run_allow_list(needed)
+        tier_b_got = _run_tier1(needed - tier_a_got)
+        tier1_success = tier_b_got
+        tier2_success = tier_a_got
+    else:
+        tier1_success = _run_tier1(needed)
+        tier2_success = _run_allow_list(needed - tier1_success)
 
     total = len(state.harvested)
     final_msg = (
         f"\nHarvester finished: {total} total bundles in state; "
-        f"{tier1_success} freshly harvested via tier 1."
+        f"{tier1_success} via tier-1 listing + {tier2_success} via allow-list."
     )
     if args.dry_run:
         final_msg += f"\nDry-run bundles kept at: ~/.kaggle_harvester/dry-run-bundles/"
@@ -300,13 +344,31 @@ def build_parser() -> argparse.ArgumentParser:
                          "Most Kaggle competitions are perpetual or have far-future "
                          "deadlines, so the closed-only default often yields 0 candidates.")
     sp.add_argument("--allow-list", default="",
-                    help="Tier-2 fallback: file with pre-accepted competition slugs (one per line)")
+                    help="File with user-curated competition slugs (one per line). "
+                         "By default these are tried as a tier-2 fallback after the generic "
+                         "Kaggle-listing walk. Pass --prioritize-allow-list to run them first.")
+    sp.add_argument("--prioritize-allow-list", action="store_true",
+                    help="Run the --allow-list slugs BEFORE walking the generic Kaggle listing. "
+                         "Use when you have specific competitions you want harvested first.")
+    sp.add_argument("--max-bundle-mb", type=int, default=DEFAULT_MAX_BUNDLE_MB,
+                    help=(
+                        f"Hard cap on extracted bundle size in MB (default {DEFAULT_MAX_BUNDLE_MB}). "
+                        "Competitions whose extracted data exceeds this after subsampling are "
+                        "skipped with reason 'bundle_too_large' and added to blocked_competitions."
+                    ))
     sp.add_argument("--seed", type=int, default=None)
     sp.set_defaults(func=cmd_run)
     return p
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    # Force unbuffered stdout so progress lines survive a crash, even when
+    # stdout is redirected to a file (Python defaults to block buffering
+    # when the target isn't a TTY).
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except AttributeError:
+        pass
     parser = build_parser()
     args = parser.parse_args(argv)
     _setup_logging(args.verbose)
