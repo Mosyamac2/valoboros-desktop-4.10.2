@@ -165,14 +165,12 @@ def test_run_phase_a_persists_transcript_and_files(
         repo_dir=repo_dir,
     )
 
-    result = _run_async(validator.run())
+    # Phase 1 covers Phase A in isolation; chained-run behavior is
+    # exercised by tests/test_agentic_phase_b.py.
+    pa = _run_async(validator.run_phase_a())
 
-    assert result.success, f"Run reported failure: {result.error}"
-    assert result.bundle_id == "bundle-test"
-    assert len(result.phases) == 1
-    pa = result.phases[0]
     assert pa.phase == "A"
-    assert pa.success
+    assert pa.success, f"Phase A reported failure: {pa.error}"
     assert pa.session_id == "sid-123"
     assert pa.cost_usd == pytest.approx(0.42)
     assert pa.turns == 2
@@ -184,14 +182,6 @@ def test_run_phase_a_persists_transcript_and_files(
     # 2 assistant + 1 result message recorded
     assert len(lines) == 3
     assert all("kind" in json.loads(line) for line in lines)
-
-    aggregate_path = bundle_dir / "_agentic_transcripts" / "result.json"
-    assert aggregate_path.exists()
-    blob = json.loads(aggregate_path.read_text(encoding="utf-8"))
-    assert blob["bundle_id"] == "bundle-test"
-    assert blob["model_type"] == "classification"
-    assert blob["success"] is True
-    assert blob["total_cost_usd"] == pytest.approx(0.42)
 
 
 def test_phase_a_fails_when_no_methodology_written(

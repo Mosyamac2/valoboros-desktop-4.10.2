@@ -224,9 +224,27 @@ class AgenticValidator:
     # ------------------------------------------------------------------
 
     async def run_phase_b(self) -> AgenticPhaseResult:
-        raise NotImplementedError(
-            "Phase B (project authoring) lands in sub-phase 2 of plan v2; "
-            "the runner skeleton currently only implements Phase A."
+        """Phase B — author the ``validation_project/`` Python package.
+
+        Reads ``./methodology/methodology.md``. Writes a complete project
+        under ``./methodology/validation_project/`` with ``run_all.py``,
+        ``requirements.txt``, qualitative/quantitative test modules, and a
+        ``common/`` helper package.
+
+        Phase B may use a different (often cheaper) model than Phase A —
+        the work is mechanical Python authoring under a fixed contract.
+        Configured via ``self.phase_b_model`` (env
+        ``OUROBOROS_VALIDATION_PHASE_B_MODEL``).
+        """
+        user_prompt = load_phase_prompt("b")
+        return await self._run_phase(
+            phase="B",
+            user_prompt=user_prompt,
+            model=self.phase_b_model,
+            expected_outputs=[
+                self.bundle_dir / "methodology" / "validation_project" / "run_all.py",
+                self.bundle_dir / "methodology" / "validation_project" / "requirements.txt",
+            ],
         )
 
     async def run_phase_c(self) -> AgenticPhaseResult:
@@ -246,7 +264,14 @@ class AgenticValidator:
     async def run(self) -> AgenticValidationResult:
         """Chain A → B → C → D. Persists the aggregate result on disk.
 
-        Sub-phase 1 only runs Phase A. Later phases will extend this.
+        Phases run sequentially; a failed early phase halts the chain so we
+        don't waste budget on downstream work that has no upstream input
+        (e.g. Phase B needs methodology.md to exist). The aggregate is
+        always persisted, even on partial failure, so callers can inspect
+        what made it through.
+
+        Phases C and D land in sub-phases 3-4 of plan v2; the chain stops
+        cleanly at the highest implemented phase.
         """
         agg = AgenticValidationResult(
             bundle_id=self.bundle_id,
@@ -255,6 +280,7 @@ class AgenticValidator:
             started_at=_utcnow_iso(),
         )
 
+        # Phase A — methodology
         try:
             phase_a = await self.run_phase_a()
             agg.phases.append(phase_a)
@@ -265,6 +291,32 @@ class AgenticValidator:
             agg.success = False
             agg.error = f"phase_a:{type(exc).__name__}:{exc}"
             log.exception("Agentic Phase A failed for bundle %s", self.bundle_id)
+            agg.finished_at = _utcnow_iso()
+            self._persist_aggregate(agg)
+            return agg
+
+        if not phase_a.success:
+            # methodology.md missing or session errored — don't even try B
+            agg.finished_at = _utcnow_iso()
+            self._persist_aggregate(agg)
+            return agg
+
+        # Phase B — project authoring
+        try:
+            phase_b = await self.run_phase_b()
+            agg.phases.append(phase_b)
+            agg.total_cost_usd += phase_b.cost_usd
+            agg.total_turns += phase_b.turns
+            agg.success = phase_b.success
+            if not phase_b.success and not agg.error:
+                agg.error = f"phase_b:{phase_b.error}"
+        except NotImplementedError:
+            # Phase C/D would gate here too once Phase B is the cap.
+            pass
+        except Exception as exc:
+            agg.success = False
+            agg.error = f"phase_b:{type(exc).__name__}:{exc}"
+            log.exception("Agentic Phase B failed for bundle %s", self.bundle_id)
 
         agg.finished_at = _utcnow_iso()
         self._persist_aggregate(agg)
