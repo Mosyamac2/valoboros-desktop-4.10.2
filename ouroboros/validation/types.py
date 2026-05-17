@@ -207,6 +207,11 @@ class RevalidationResult:
     recommendations_applied: list[str]   # check_ids of applied recommendations
     recommendations_skipped: list[str]   # check_ids of skipped recommendations
     verdict: str                         # "improved" | "degraded" | "unchanged" | "mixed"
+    # Plan v2: agentic revalidation populates these. Defaults keep
+    # backward-compat with v1 callers that don't know about them.
+    categorical_lift: dict[str, int] = field(default_factory=dict)
+    per_test_deltas: list[dict[str, Any]] = field(default_factory=list)
+    source: str = "v1"                   # "v1" (S2-S7 re-run) | "agentic-v2"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

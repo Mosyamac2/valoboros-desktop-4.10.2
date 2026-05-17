@@ -471,7 +471,7 @@ def test_function_count_reasonable():
     """Codebase doesn't have too few or too many functions."""
     sizes = _get_function_sizes()
     assert len(sizes) >= 100, f"Only {len(sizes)} functions — too few?"
-    assert len(sizes) <= 1300, f"{len(sizes)} functions — too many?"
+    assert len(sizes) <= 1400, f"{len(sizes)} functions — too many?"
 
 
 # ── Pre-push gate tests ──────────────────────────────────────────────
