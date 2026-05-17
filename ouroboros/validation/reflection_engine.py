@@ -77,14 +77,23 @@ class ValidationReflectionEngine:
             model_type = report.get("model_profile", {}).get("model_type", "unknown")
             bundle_id = report.get("bundle_id", "?")
 
+            # Dedup is per-report so we don't double-count when a finding
+            # appears in BOTH `critical_findings` and `stages.checks` for
+            # the same bundle. (Previously this guard was global, which
+            # caused every check_id after the first occurrence to be
+            # silently dropped — so cross-bundle patterns never reached
+            # the >= 2 frequency threshold.)
+            seen_check_ids_in_this_report: set[str] = set()
+
             for finding in report.get("critical_findings", []):
                 check_id = finding.get("check_id", "")
-                if check_id:
+                if check_id and check_id not in seen_check_ids_in_this_report:
                     check_failures[check_id].append({
                         "bundle_id": bundle_id,
                         "model_type": model_type,
                         "details": finding.get("details", ""),
                     })
+                    seen_check_ids_in_this_report.add(check_id)
                     all_triggered_checks.add(check_id)
 
             # Also scan stage checks for triggered (passed=False) checks
@@ -94,12 +103,13 @@ class ValidationReflectionEngine:
                         cid = check.get("check_id", "")
                         if cid:
                             all_triggered_checks.add(cid)
-                            if cid not in check_failures:
+                            if cid not in seen_check_ids_in_this_report:
                                 check_failures[cid].append({
                                     "bundle_id": bundle_id,
                                     "model_type": model_type,
                                     "details": check.get("details", ""),
                                 })
+                                seen_check_ids_in_this_report.add(cid)
 
         # Build patterns: checks that fail in >= 2 reports
         for check_id, occurrences in check_failures.items():
