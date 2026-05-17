@@ -119,22 +119,47 @@ class ModelImprover:
         )
 
     async def _apply_recommendation(self, rec: ImprovementRecommendation) -> list[str]:
-        """Use LLM to modify code files based on a recommendation."""
-        # Find the most relevant code file
+        """Use LLM to modify code files based on a recommendation.
+
+        Targets ``.py`` files first; falls back to ``.ipynb`` notebooks
+        (Kaggle bundles arrive as notebooks). For notebooks the code cells
+        are concatenated into a single virtual script for the LLM, then
+        the modified text is written back into one consolidated code cell
+        — losing the original cell partition is the price of keeping this
+        path simple, but the resulting notebook still executes top-to-bottom.
+        """
         py_files = sorted(self._improved_dir.rglob("*.py"))
-        if not py_files:
+        ipynb_files = sorted(self._improved_dir.rglob("*.ipynb"))
+        if not py_files and not ipynb_files:
             return []
 
-        # For simplicity, modify the first/main Python file
-        target_file = py_files[0]
-        original_code = target_file.read_text(encoding="utf-8", errors="replace")
+        if py_files:
+            target_file = py_files[0]
+            original_code = target_file.read_text(encoding="utf-8", errors="replace")
+            is_notebook = False
+            nb_obj = None
+        else:
+            target_file = ipynb_files[0]
+            try:
+                import nbformat
+                nb_obj = nbformat.read(str(target_file), as_version=4)
+            except Exception as exc:
+                log.warning("Could not parse notebook %s: %s", target_file, exc)
+                return []
+            code_cells = [c for c in nb_obj.cells if c.get("cell_type") == "code"]
+            original_code = "\n\n# ---- next cell ----\n".join(
+                "".join(c.get("source", "")) if isinstance(c.get("source"), list)
+                else str(c.get("source", ""))
+                for c in code_cells
+            )
+            is_notebook = True
 
         prompt = _IMPROVE_PROMPT.format(
             problem=rec.problem,
             recommendation=rec.recommendation,
             sketch=rec.implementation_sketch or "(no sketch provided)",
             filename=target_file.name,
-            code=original_code[:50000],  # truncate very large files
+            code=original_code[:50000],
         )
 
         try:
@@ -143,7 +168,8 @@ class ModelImprover:
             response, _usage = await asyncio.to_thread(
                 client.chat,
                 messages=[
-                    {"role": "system", "content": "You modify Python code. Return only the modified code."},
+                    {"role": "system",
+                     "content": "You modify Python code. Return only the modified code."},
                     {"role": "user", "content": prompt},
                 ],
                 model=self._config.improvement_model,
@@ -154,29 +180,111 @@ class ModelImprover:
             if isinstance(text, list):
                 text = " ".join(b.get("text", "") for b in text if isinstance(b, dict))
             text = text.strip()
-            # Strip markdown fences
             if text.startswith("```"):
                 text = text.split("\n", 1)[-1]
             if text.endswith("```"):
                 text = text.rsplit("```", 1)[0]
             text = text.strip()
 
-            if text and text != original_code:
+            if not text or text == original_code:
+                return []
+
+            if is_notebook and nb_obj is not None:
+                import nbformat
+                # Drop existing code cells, replace with one consolidated cell
+                # carrying the LLM-modified code. Preserve any markdown cells
+                # in original order — keeps narration around the new code.
+                preserved: list = []
+                code_inserted = False
+                for cell in nb_obj.cells:
+                    if cell.get("cell_type") == "code":
+                        if not code_inserted:
+                            preserved.append(nbformat.v4.new_code_cell(source=text))
+                            code_inserted = True
+                        # else: drop subsequent code cells
+                    else:
+                        preserved.append(cell)
+                if not code_inserted:
+                    preserved.append(nbformat.v4.new_code_cell(source=text))
+                nb_obj.cells = preserved
+                nbformat.write(nb_obj, str(target_file))
+            else:
                 target_file.write_text(text, encoding="utf-8")
-                return [str(target_file.relative_to(self._improved_dir))]
+            return [str(target_file.relative_to(self._improved_dir))]
         except Exception as exc:
             log.warning("LLM code modification failed: %s", exc)
 
         return []
 
     def _test_modified_code(self) -> SandboxResult:
-        """Run the modified code in sandbox to verify it works."""
-        py_files = sorted(self._improved_dir.rglob("*.py"))
-        if not py_files:
-            return SandboxResult(returncode=-1, stdout="", stderr="No Python files", duration_sec=0, oom_killed=False, timeout_killed=False)
+        """Regression check on the modified code: must still parse as Python.
 
-        script = py_files[0].read_text(encoding="utf-8", errors="replace")
-        return self._sandbox.run(script, timeout=self._config.stage_timeout_sec)
+        We deliberately do NOT execute the full kernel in the hermetic
+        validation sandbox — real ML kernels require numpy/pandas/sklearn/
+        torch/etc. and the hermetic sandbox is intentionally empty. Whether
+        the modified model still produces sensible metrics is the
+        revalidation pipeline's job (S2–S8 with deps installed). At this
+        layer the right gate is "does the modified code still parse as
+        valid Python after stripping jupyter magics".
+        """
+        def _strip_jupyter_magics(text: str) -> str:
+            out_lines: list[str] = []
+            in_cell_magic = False
+            for line in text.splitlines():
+                s = line.lstrip()
+                if s.startswith("%%"):
+                    in_cell_magic = True
+                    continue
+                if in_cell_magic and (not line.strip() or line[0] in " \t"):
+                    continue
+                in_cell_magic = False
+                if s.startswith("%") or s.startswith("!"):
+                    continue
+                out_lines.append(line)
+            return "\n".join(out_lines)
+
+        py_files = sorted(self._improved_dir.rglob("*.py"))
+        ipynb_files = sorted(self._improved_dir.rglob("*.ipynb"))
+
+        if py_files:
+            source = py_files[0].read_text(encoding="utf-8", errors="replace")
+            stripped = _strip_jupyter_magics(source)
+            filename = py_files[0].name
+        elif ipynb_files:
+            try:
+                import nbformat
+                nb = nbformat.read(str(ipynb_files[0]), as_version=4)
+            except Exception as exc:
+                return SandboxResult(
+                    returncode=-1, stdout="", stderr=f"Could not parse notebook: {exc}",
+                    duration_sec=0, oom_killed=False, timeout_killed=False,
+                )
+            stripped = "\n\n".join(
+                _strip_jupyter_magics(
+                    "".join(c.get("source", "")) if isinstance(c.get("source"), list)
+                    else str(c.get("source", ""))
+                )
+                for c in nb.cells if c.get("cell_type") == "code"
+            )
+            filename = ipynb_files[0].name
+        else:
+            return SandboxResult(
+                returncode=-1, stdout="", stderr="No Python or notebook files found",
+                duration_sec=0, oom_killed=False, timeout_killed=False,
+            )
+
+        try:
+            compile(stripped, filename, mode="exec")
+            return SandboxResult(
+                returncode=0, stdout="syntax OK", stderr="",
+                duration_sec=0, oom_killed=False, timeout_killed=False,
+            )
+        except SyntaxError as exc:
+            return SandboxResult(
+                returncode=1, stdout="",
+                stderr=f"SyntaxError after modification: {exc.msg} at line {exc.lineno}",
+                duration_sec=0, oom_killed=False, timeout_killed=False,
+            )
 
     def _revert_files(self, modified: list[str]) -> None:
         """Revert modified files back to originals."""

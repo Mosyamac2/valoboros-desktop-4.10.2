@@ -98,10 +98,17 @@ async def _improve_one(bundle_dir: pathlib.Path) -> dict:
 
     t0 = time.monotonic()
     try:
-        result = await asyncio.get_event_loop().run_in_executor(None, improver.implement)
+        # improver.implement() is async — await it directly. Wrapping in
+        # run_in_executor was wrong: it would return the un-awaited
+        # coroutine object instead of running the LLM-driven sandbox edits.
+        result = await improver.implement()
         impl_sec = time.monotonic() - t0
-        applied = getattr(result, "recommendations_applied", []) or getattr(result, "applied", [])
-        skipped = getattr(result, "recommendations_skipped", []) or getattr(result, "skipped", [])
+        applied = getattr(result, "recommendations_applied", None)
+        if applied is None:
+            applied = getattr(result, "applied", []) or []
+        skipped = getattr(result, "recommendations_skipped", None)
+        if skipped is None:
+            skipped = getattr(result, "skipped", []) or []
         _emit({
             "event": "improver_done", "bundle_id": bundle_id,
             "duration_sec": round(impl_sec, 1),
@@ -124,19 +131,22 @@ async def _improve_one(bundle_dir: pathlib.Path) -> dict:
         if "meta_scores" in report and isinstance(report["meta_scores"], dict):
             original_metrics = {k: float(v) for k, v in report["meta_scores"].items()
                                 if isinstance(v, (int, float))}
-        applied_ids = [a if isinstance(a, str) else getattr(a, "finding_check_id", str(a))
-                       for a in (getattr(result, "recommendations_applied", []) or [])]
+        applied_ids: list[str] = []
+        for a in (getattr(result, "recommendations_applied", None) or
+                  getattr(result, "applied", []) or []):
+            if isinstance(a, str):
+                applied_ids.append(a)
+            else:
+                applied_ids.append(getattr(a, "finding_check_id", str(a)))
         skipped_pairs: list = []
-        for s in (getattr(result, "recommendations_skipped", []) or []):
+        for s in (getattr(result, "recommendations_skipped", None) or
+                  getattr(result, "skipped", []) or []):
             if isinstance(s, (tuple, list)) and len(s) == 2:
                 skipped_pairs.append((str(s[0]), str(s[1])))
             else:
                 skipped_pairs.append((str(s), "no_reason"))
         t1 = time.monotonic()
-        reval = await asyncio.get_event_loop().run_in_executor(
-            None,
-            revalidator.run, original_metrics, applied_ids, skipped_pairs,
-        )
+        reval = await revalidator.run(original_metrics, applied_ids, skipped_pairs)
         reval_sec = time.monotonic() - t1
         _emit({
             "event": "revalidation_done", "bundle_id": bundle_id,
