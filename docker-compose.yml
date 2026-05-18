@@ -1,0 +1,68 @@
+services:
+  valoboros:
+    build: .
+    container_name: valoboros
+    restart: unless-stopped
+
+    # Use host network so container can reach proxy on 127.0.0.1:10809.
+    # This means the container shares the host's network stack — no port
+    # mapping needed (server binds directly to host:8765).
+    network_mode: host
+
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OUROBOROS_NETWORK_PASSWORD=${OUROBOROS_NETWORK_PASSWORD:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OUROBOROS_SERVER_HOST=0.0.0.0
+      - OUROBOROS_SERVER_PORT=8765
+      - OUROBOROS_REPO_DIR=/repo
+      - OUROBOROS_DATA_DIR=/data
+      - OUROBOROS_VALIDATION_INBOX_DIR=ml-models-to-validate
+      - OUROBOROS_VALIDATION_SANDBOX_MEM_MB=2048
+      - OUROBOROS_FILE_BROWSER_DEFAULT=/data
+      - TOTAL_BUDGET=${TOTAL_BUDGET:-50}
+      # Proxy: use VALOBOROS_PROXY in .env to avoid collision with host env.
+      # With network_mode:host, 127.0.0.1 works directly.
+      - VALOBOROS_PROXY=${VALOBOROS_PROXY:-${HTTPS_PROXY:-${HTTP_PROXY:-}}}
+      - NO_PROXY=localhost,127.0.0.1
+
+    volumes:
+      # Persistent data (survives container restarts and rebuilds)
+      - valoboros-data:/data
+      - valoboros-repo:/repo
+
+      # Inbox is now inside valoboros-data volume at /data/ml-models-to-validate/
+      # Upload via web UI or copy files into the volume.
+
+      # Safety-critical files: READ-ONLY bind mounts
+      # Agent physically cannot modify these inside the container
+      - ./BIBLE.md:/app/BIBLE.md:ro
+      - ./ouroboros/safety.py:/app/ouroboros/safety.py:ro
+      - ./ouroboros/tools/registry.py:/app/ouroboros/tools/registry.py:ro
+      - ./prompts/SAFETY.md:/app/prompts/SAFETY.md:ro
+      - ./ouroboros/validation/sandbox.py:/app/ouroboros/validation/sandbox.py:ro
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 6G
+        reservations:
+          cpus: "2"
+          memory: 2G
+
+    # Security: drop all capabilities except what's needed
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_ADMIN    # needed for unshare --net in sandbox
+
+    # Prevent container from gaining new privileges
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  valoboros-data:
+  valoboros-repo:

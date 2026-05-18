@@ -1,0 +1,12 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+validation_data/
+ml-models-to-validate/
+.env
+aux_notes/
+tests/
+*.egg-info/
+dist/
+build/

@@ -1,0 +1,58 @@
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+
+# IDE
+.cursor/
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyinstaller-cache/
+
+# Validation inbox (runtime data, lives in DATA_DIR)
+ml-models-to-validate/
+validation_data/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Build artifacts
+dist/
+build/
+*.dmg
+python-standalone/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Release helpers (not tracked)
+.create_release.py
+.release_notes.md
+
+# Test artifacts
+<MagicMock*
+.tmp-data-*/
+
+# Example model bundles (user-supplied — may contain proprietary data)
+prepayment_consumer_loans_model.zip
+Complaints_Classification_NLP_model.zip
+
+# Harvester runtime artifacts
+.kaggle_harvester/

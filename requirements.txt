@@ -1,0 +1,20 @@
+openai>=1.66.0
+requests
+dulwich
+starlette
+python-multipart
+uvicorn[standard]
+websockets
+huggingface_hub
+# Required: Claude Agent SDK is the sole cloud LLM transport after the OAuth
+# subscription migration (BIBLE v5.1). The CLI subprocess fallback in
+# claude_code_edit/advisory_pre_review still works without it, but the main
+# agent loop, safety supervisor, validation pipeline, vision, web_search,
+# and review all require the SDK.
+claude-agent-sdk>=0.1.50
+# optional: browser automation tools (for browse_page/browser_action)
+playwright
+playwright-stealth
+# optional: local model server (manual fallback when subscription is offline
+# or rate-limited; requires Metal-enabled build on macOS)
+# CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python[server]
