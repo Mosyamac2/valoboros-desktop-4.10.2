@@ -580,6 +580,7 @@ class ValidationConfig:
     pre_research: bool = True
     research_max_queries: int = 3
     research_max_papers: int = 5
+    cleanup_sandbox_after_run: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

@@ -33,6 +33,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import pathlib
 import sys
 from datetime import datetime, timezone
@@ -246,16 +247,24 @@ async def amain(args) -> int:
         return 1
 
     if not args.skip_agentic:
-        await stage_agentic_validation(bundle_dirs)
+        targets = bundle_dirs
+        if args.max_bundles is not None and args.max_bundles > 0:
+            targets = bundle_dirs[: args.max_bundles]
+            _emit({"event": "agentic_capped", "n_target": len(targets),
+                   "n_total": len(bundle_dirs), "max_bundles": args.max_bundles})
+        await stage_agentic_validation(targets)
 
     stage_legacy_bridge(bundle_dirs)
     await stage_revalidation(bundle_dirs)
 
     reflection = stage_reflection(validations_dir, knowledge_dir)
     proposals = stage_evolver(reflection, knowledge_dir)
+    env_flag = os.environ.get("OUROBOROS_APPLY_EVOLUTION", "").strip().lower()
+    env_apply = env_flag in {"1", "true", "yes", "on"}
+    apply_evolution = args.apply_evolution or env_apply
     stage_source_evolution(
         proposals, REPO, knowledge_dir,
-        dry_run=not args.apply_evolution,
+        dry_run=not apply_evolution,
     )
 
     _emit({"event": "demo_done"})
@@ -273,7 +282,14 @@ def main() -> int:
                              "bundles already have results.json from a prior run.")
     parser.add_argument("--apply-evolution", action="store_true",
                         help="Stage 6 actually invokes claude_code_edit. "
-                             "Default is dry-run.")
+                             "Default is dry-run. Equivalent to setting "
+                             "OUROBOROS_APPLY_EVOLUTION=1 in the env.")
+    parser.add_argument("--max-bundles", type=int, default=None,
+                        help="Cap Stage 1 (agentic validation) to the first N "
+                             "bundles. Useful for smoke-testing on a small "
+                             "subset before committing the full subscription "
+                             "rate window. Stages 2-6 still run over all "
+                             "bundles that have results.json.")
     args = parser.parse_args()
     return asyncio.run(amain(args))
 

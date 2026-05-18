@@ -83,6 +83,13 @@ class ValidationPipeline:
 
     async def run(self) -> ValidationReport:
         """Execute the full validation pipeline."""
+        try:
+            return await self._run_inner()
+        finally:
+            if getattr(self._config, "cleanup_sandbox_after_run", False):
+                self._sandbox.cleanup()
+
+    async def _run_inner(self) -> ValidationReport:
         self._update_status("validating")
         stages: list[ValidationStageResult] = []
         self._log(f"Starting validation pipeline for bundle {self._bundle_id}")
@@ -493,6 +500,20 @@ class RevalidationPipeline:
         recommendations_skipped: list[tuple[str, str]],
     ) -> RevalidationResult:
         """Run S2-S7 on improved model, compare with original, compute lift."""
+        try:
+            return await self._run_inner(
+                original_metrics, recommendations_applied, recommendations_skipped,
+            )
+        finally:
+            if getattr(self._config, "cleanup_sandbox_after_run", False):
+                self._sandbox.cleanup()
+
+    async def _run_inner(
+        self,
+        original_metrics: dict[str, float],
+        recommendations_applied: list[str],
+        recommendations_skipped: list[tuple[str, str]],
+    ) -> RevalidationResult:
         # Load profile
         profile = self._load_profile()
 

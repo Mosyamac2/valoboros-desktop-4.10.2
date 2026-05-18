@@ -37,6 +37,7 @@ _KEY_MAP: dict[str, str] = {
     "OUROBOROS_VALIDATION_PRE_RESEARCH": "pre_research",
     "OUROBOROS_VALIDATION_RESEARCH_MAX_QUERIES": "research_max_queries",
     "OUROBOROS_VALIDATION_RESEARCH_MAX_PAPERS": "research_max_papers",
+    "OUROBOROS_VALIDATION_CLEANUP_SANDBOX": "cleanup_sandbox_after_run",
 }
 
 

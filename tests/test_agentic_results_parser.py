@@ -141,3 +141,66 @@ def test_parse_all_passing_bundle_returns_approved_verdict(tmp_path: Path) -> No
     stage_names = [s.stage for s in report.stages]
     assert stage_names == ["QUAL", "QUANT"]
     assert all(s.status == "passed" for s in report.stages)
+
+
+def test_parse_writes_improvement_plan_from_agentic_findings(tmp_path: Path) -> None:
+    """The improvement → revalidation handoff must read the agentic findings.
+
+    Regression for the case where a legacy stage runner wrote
+    ``improvement/plan.json`` first (with stale S8.CODE_SMELLS recs) and a
+    later agentic pass left it untouched. After parsing, the plan file
+    must reflect the agentic ``hard_recommendations``/``soft_recommendations``.
+    """
+    tests = [
+        {"id": "q1", "name": "train/test contamination", "block": "qualitative",
+         "verdict": "fail", "metric": None,
+         "evidence": "pd.concat([train,test]) before encoders", "error": None},
+        {"id": "quant5", "name": "engineered-ratio inf/NaN audit",
+         "block": "quantitative", "verdict": "fail",
+         "metric": {"max_inf_plus_nan_rate": 0.67},
+         "evidence": "0.67 inf/NaN rate across 14 ratios", "error": None},
+    ]
+    summary = {"n_pass": 0, "n_warn": 0, "n_fail": 2, "n_deferred": 0, "n_error": 0}
+    bundle = _seed_bundle(tmp_path, tests, summary, "")
+
+    # Seed a stale legacy plan to be overwritten.
+    plan_path = bundle / "improvement" / "plan.json"
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(json.dumps({
+        "hard": [{"finding_check_id": "S8.CODE_SMELLS",
+                  "problem": "stale legacy recommendation",
+                  "recommendation": "should be overwritten",
+                  "kind": "hard", "implementation_sketch": "",
+                  "estimated_metric_impact": {}, "confidence": 0.5,
+                  "effort": "trivial", "priority": 1}],
+        "soft": [],
+    }), encoding="utf-8")
+
+    report = parse_agentic_results(bundle)
+
+    # plan.json now reflects the agentic findings, not the stale legacy one.
+    blob = json.loads(plan_path.read_text(encoding="utf-8"))
+    hard_ids = [r["finding_check_id"] for r in blob["hard"]]
+    assert "S8.CODE_SMELLS" not in hard_ids, (
+        "stale legacy recommendation should have been overwritten"
+    )
+    assert sorted(hard_ids) == sorted(
+        r.finding_check_id for r in report.hard_recommendations
+    )
+    # And the new ids correspond to the failing agentic tests.
+    assert set(hard_ids) == {"QUALITATIVE.q1", "QUANTITATIVE.quant5"}
+
+
+def test_parse_skips_plan_write_when_legacy_report_disabled(tmp_path: Path) -> None:
+    """``write_legacy_report=False`` must skip both report.json and plan.json,
+    so callers that want to inspect the parsed report without touching disk
+    can opt out."""
+    tests = [{"id": "q1", "name": "x", "block": "qualitative",
+              "verdict": "fail", "metric": None, "evidence": "", "error": None}]
+    summary = {"n_pass": 0, "n_warn": 0, "n_fail": 1, "n_deferred": 0, "n_error": 0}
+    bundle = _seed_bundle(tmp_path, tests, summary, "")
+
+    parse_agentic_results(bundle, write_legacy_report=False)
+
+    assert not (bundle / "results" / "report.json").exists()
+    assert not (bundle / "improvement" / "plan.json").exists()

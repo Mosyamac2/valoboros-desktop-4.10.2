@@ -52,3 +52,36 @@ def test_run_returns_duration(sandbox):
     r = sandbox.run('import time; time.sleep(1); print("done")', timeout=10)
     assert r.duration_sec >= 0.9
     assert r.duration_sec < 5
+
+
+def test_cleanup_removes_venv_when_present(tmp_path):
+    """``ModelSandbox.cleanup()`` deletes the per-bundle ``.sandbox_venv`` dir.
+
+    Heavy ML stacks (torch + nvidia-cu13) routinely add 5 GB per bundle;
+    without cleanup the venvs accumulate until the disk fills mid-run.
+    """
+    cfg = ValidationConfig(sandbox_mem_mb=512, sandbox_cpu_sec=5)
+    sb = ModelSandbox(tmp_path, cfg)
+    venv_dir = tmp_path / ".sandbox_venv"
+    # Simulate a previously-created venv with a heavy site-packages tree.
+    (venv_dir / "lib" / "python3.12" / "site-packages" / "torch").mkdir(parents=True)
+    (venv_dir / "lib" / "python3.12" / "site-packages" / "torch" / "lib.so").write_bytes(b"x" * 1024)
+    assert venv_dir.exists()
+
+    sb.cleanup()
+
+    assert not venv_dir.exists()
+
+
+def test_cleanup_is_idempotent_when_venv_absent(tmp_path):
+    """``cleanup()`` on a sandbox that never installed packages is a no-op,
+    not an error — required so the ``finally:`` block in the pipeline is safe
+    to call unconditionally."""
+    cfg = ValidationConfig(sandbox_mem_mb=512, sandbox_cpu_sec=5)
+    sb = ModelSandbox(tmp_path, cfg)
+    # No venv was created.
+    assert not (tmp_path / ".sandbox_venv").exists()
+
+    sb.cleanup()  # must not raise
+
+    assert not (tmp_path / ".sandbox_venv").exists()

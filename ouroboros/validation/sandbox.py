@@ -139,6 +139,22 @@ class ModelSandbox:
                 except Exception:
                     pass
 
+    def cleanup(self) -> None:
+        """Remove the per-bundle ``.sandbox_venv`` directory if present.
+
+        Heavy ML stacks (torch + the full nvidia-cu13 set) routinely add
+        5+ GB per bundle. Without explicit cleanup the venvs accumulate
+        until the disk fills and the supervisor aborts mid-run.
+        Idempotent; safe to call from a ``finally:`` block.
+        """
+        if not self._venv_dir.exists():
+            return
+        try:
+            shutil.rmtree(self._venv_dir, ignore_errors=False)
+            log.info("Removed sandbox venv at %s", self._venv_dir)
+        except Exception as exc:
+            log.warning("Failed to remove sandbox venv at %s: %s", self._venv_dir, exc)
+
     def run_notebook(self, notebook_path: str, timeout: int = 300) -> SandboxResult:
         """Execute a Jupyter notebook by converting to .py first, then running."""
         nb_path = (self._bundle_dir / notebook_path).resolve()

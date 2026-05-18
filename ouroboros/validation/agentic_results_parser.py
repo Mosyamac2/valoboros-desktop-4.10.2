@@ -326,4 +326,23 @@ def parse_agentic_results(
         except OSError as exc:
             log.warning("Could not write legacy report.json at %s: %s", out_path, exc)
 
+        # Mirror the agentic recommendations into improvement/plan.json so the
+        # downstream improvement → revalidation handoff reads the same source
+        # of truth. The legacy synthesis stage writes the same file from
+        # stage-runner findings; without this mirror, a later agentic pass
+        # leaves a stale legacy plan in place.
+        plan_path = bundle_dir / "improvement" / "plan.json"
+        try:
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_data = {
+                "hard": [r.to_dict() for r in hard_recs],
+                "soft": [r.to_dict() for r in soft_recs],
+            }
+            plan_path.write_text(
+                json.dumps(plan_data, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            log.warning("Could not write improvement/plan.json at %s: %s", plan_path, exc)
+
     return report
