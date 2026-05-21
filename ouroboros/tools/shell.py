@@ -960,6 +960,53 @@ def _claude_code_edit(ctx: ToolContext, prompt: str, cwd: str = "",
     return _parse_claude_output(stdout, ctx)
 
 
+def claude_code_edit(prompt: str, cwd: str, max_turns: int = 12) -> Dict[str, Any]:
+    """Public source-evolution entry: SDK edit against ``cwd`` without ToolContext.
+
+    Returns the dict shape consumed by
+    ``ouroboros.validation.agentic_source_evolution._default_editor``.
+    """
+    oauth_token = (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "") or "").strip()
+    api_key = (os.environ.get("ANTHROPIC_API_KEY", "") or "").strip()
+    if not oauth_token and not api_key:
+        return {"not_executed": True,
+                "error": "neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is set"}
+    try:
+        from ouroboros.gateways.claude_code import run_edit
+    except ImportError as exc:
+        return {"not_executed": True, "error": f"claude-agent-sdk not installed: {exc}"}
+
+    work_dir = str(pathlib.Path(cwd).resolve())
+    model = os.environ.get("CLAUDE_CODE_MODEL", "opus").strip()
+    try:
+        result = run_edit(
+            prompt=prompt, cwd=work_dir, model=model, max_turns=max_turns,
+            system_prompt=f"STRICT: Only modify files inside {work_dir}. Do NOT commit or push.",
+        )
+    except Exception as exc:
+        return {"success": False, "error": f"{type(exc).__name__}: {exc}"}
+
+    changed = list(result.changed_files or [])
+    if not changed:
+        try:
+            res = subprocess.run(["git", "status", "--porcelain"],
+                                 cwd=work_dir, capture_output=True, text=True, timeout=10)
+            changed = [l[3:].rstrip() for l in (res.stdout or "").splitlines() if len(l) > 3]
+        except Exception:
+            log.debug("git status --porcelain fallback failed", exc_info=True)
+
+    out: Dict[str, Any] = {"success": bool(result.success)}
+    if changed:
+        out["changed_files"] = changed
+    if result.session_id:
+        out["session_id"] = result.session_id
+    if result.cost_usd:
+        out["cost_usd"] = round(result.cost_usd, 6)
+    if result.error:
+        out["error"] = result.error
+    return out
+
+
 def get_tools() -> List[ToolEntry]:
     return [
         ToolEntry("run_shell", {
