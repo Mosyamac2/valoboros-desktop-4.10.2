@@ -88,3 +88,28 @@ H2 section headers for "Block 1: Qualitative analysis" and
 
 This file is the ONLY artifact for this phase. Phase B will read it as
 machine-parseable input. Be precise.
+
+## Structural-artifact guard (learned from prior validations)
+
+The following Phase-A check IDs have, across past bundles, failed without
+producing any confirmed true-positive impact during the improvement cycle.
+They are likely structural artifacts of how the bundle was packaged —
+hardcoded `/kaggle/input/` paths, vendor preambles, dataset separators,
+notebook scaffolding — rather than real model defects:
+
+- **Qualitative**: q1, q2, q3, q4, q5, q6, q7, q8
+- **Quantitative**: quant2, quant4, quant5, quant6, quant8
+
+When designing the methodology for a NEW bundle, if you would otherwise
+include any of these checks, you MUST either:
+
+  (a) skip the check and label it `historically structural — skipped` in
+      the methodology, OR
+  (b) justify in one sentence why this check is a real defect for THIS
+      specific bundle, citing the bundle's actual file or code (not
+      generic ML-101 reasoning).
+
+Do not silently drop a check. Do not blindly include one either. This
+guard exists because the validator measured, over many bundles, that
+flagging these checks did not lead to model improvements — they were
+noise. Apply judgment per bundle.
